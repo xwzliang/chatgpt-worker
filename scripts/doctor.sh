@@ -57,6 +57,7 @@ print("Browser transport:")
 import shutil, subprocess, os, pathlib, platform
 browser=d.get("browser", {})
 transport=browser.get("transport", "cdp")
+browser_ready = True
 print(f"  Mode:           {transport}")
 
 if transport == "manual":
@@ -71,6 +72,7 @@ else:
             print(f"  Node.js:        ✓ ({node_path})")
     else:
         print("  Node.js:        ✗ NOT FOUND (required for prompt preparation/CDP)")
+        browser_ready = False
 
     devtools_found = False
     active_port_paths = [
@@ -90,7 +92,8 @@ else:
             except Exception:
                 pass
     if not devtools_found:
-        print("  Chrome DevTools:! Not active")
+        print("  Chrome DevTools:✗ Not active")
+        browser_ready = False
 
     if transport == "native":
         html=browser.get("uivision_autorun_html")
@@ -101,7 +104,17 @@ else:
         ]
         found=next((p for p in candidates if p and os.path.isfile(os.path.expanduser(p))), None)
         print(f"  UI.Vision HTML: {'✓ ' + found if found else '✗ NOT FOUND'}")
-        print(f"  UI.Vision macro:{browser.get('uivision_macro_name', 'ChatGPTClickSendExistingTab')}")
+        if not found:
+            browser_ready = False
+        macro_name=browser.get('uivision_macro_name', 'ChatGPTClickSendExistingTab')
+        macro_candidates=[
+            os.path.expanduser(f"~/Desktop/uivision/macros/{macro_name}.json"),
+            os.path.expanduser(f"~/uivision/macros/{macro_name}.json"),
+        ]
+        macro_path=next((p for p in macro_candidates if os.path.isfile(p)), None)
+        print(f"  UI.Vision macro:{'✓ ' + macro_path if macro_path else '✗ ' + macro_name + ' not installed'}")
+        if not macro_path:
+            browser_ready = False
     elif platform.system() == "Darwin":
         script_dir = pathlib.Path(sys.argv[2])
         auto_allow_bin = script_dir / "auto_allow"
@@ -118,7 +131,7 @@ else:
         else:
             print("  auto_allow:     ! Not built/running")
 
-ready = bool(d.get("origin_verified")) and bool(d.get("target_repo"))
+ready = bool(d.get("origin_verified")) and bool(d.get("target_repo")) and browser_ready
 print()
 print("Status: READY" if ready else "Status: NOT READY")
 sys.exit(0 if ready else 1)
