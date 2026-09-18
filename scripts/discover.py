@@ -113,6 +113,15 @@ def translate_remote_to_local(path: str, mappings: list[dict]) -> str | None:
             return item["local"] + path[len(remote_path):]
     return None
 
+def communication_config(cfg: dict) -> dict:
+    comm = cfg.get("communication", {})
+    runtime_dir = str(comm.get("runtime_dir", ".chatgpt-worker")).strip() or ".chatgpt-worker"
+    retain_on_merge = bool(comm.get("retain_on_merge", False))
+    return {
+        "runtime_dir": runtime_dir,
+        "retain_on_merge": retain_on_merge,
+    }
+
 def validation_commands(cfg: dict) -> list[str]:
     v = cfg.get("validation", {})
     commands = v.get("commands", [])
@@ -141,6 +150,7 @@ def discover(start: str) -> dict:
         "max_iterations": int(cfg.get("max_iterations", 5)),
         "branch_prefix": str(cfg.get("branch_prefix", "chatgpt-worker/")),
         "validation_commands": validation_commands(cfg),
+        "communication": communication_config(cfg),
         "path_mappings": path_mappings(cfg) if execution == "remote" else [],
     }
 
