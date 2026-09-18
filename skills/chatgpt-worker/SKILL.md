@@ -51,6 +51,8 @@ For every new project, ask two independent choices:
 
 Do not describe native as undetectable or human-equivalent; it is still automation.
 
+If the user chooses native, use `configure.py inspect` to detect existing UI.Vision autorun HTML and the installed `ChatGPTClickSendExistingTab` macro. If the macro is missing, instruct the user to update/install `xwzliang/my_uivision` before continuing. If no autorun HTML is found, ask for its path or instruct the user to generate one from UI.Vision Settings > API.
+
 If the user chooses local:
 
 1. optionally inspect the project for likely validation commands;
