@@ -88,6 +88,31 @@ def remote_origin(host: str, path: str) -> str | None:
         return None
     return p.stdout.strip()
 
+
+def path_mappings(cfg: dict) -> list[dict]:
+    remote = cfg.get("remote", {})
+    items = remote.get("path_mappings", [])
+    if not isinstance(items, list):
+        raise ValueError("[remote].path_mappings must be an array of tables")
+    out = []
+    for item in items:
+        if not isinstance(item, dict):
+            raise ValueError("each path_mappings entry must be a table")
+        remote_path = str(item.get("remote", "")).rstrip("/")
+        local_path = str(item.get("local", "")).rstrip("/")
+        if not remote_path or not local_path:
+            raise ValueError("each path_mappings entry requires remote and local")
+        out.append({"remote": remote_path, "local": local_path})
+    out.sort(key=lambda x: len(x["remote"]), reverse=True)
+    return out
+
+def translate_remote_to_local(path: str, mappings: list[dict]) -> str | None:
+    for item in mappings:
+        remote_path = item["remote"]
+        if path == remote_path or path.startswith(remote_path + "/"):
+            return item["local"] + path[len(remote_path):]
+    return None
+
 def validation_commands(cfg: dict) -> list[str]:
     v = cfg.get("validation", {})
     commands = v.get("commands", [])
@@ -116,6 +141,7 @@ def discover(start: str) -> dict:
         "max_iterations": int(cfg.get("max_iterations", 5)),
         "branch_prefix": str(cfg.get("branch_prefix", "chatgpt-worker/")),
         "validation_commands": validation_commands(cfg),
+        "path_mappings": path_mappings(cfg) if execution == "remote" else [],
     }
 
     if execution == "local":
@@ -164,6 +190,7 @@ def discover(start: str) -> dict:
     result.update({
         "target_host": host,
         "target_repo": matches[0],
+        "target_repo_local_mount": translate_remote_to_local(matches[0], result["path_mappings"]),
         "repo_roots": roots,
         "origin_verified": True,
         "inspected_candidates": inspected,
