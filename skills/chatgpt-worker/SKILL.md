@@ -1,68 +1,134 @@
 ---
 name: chatgpt-worker
-description: Delegate a coding task to ChatGPT Web, validate the resulting GitHub branch on a remote Linux environment over SSH, and iteratively send failures or review feedback back to the same ChatGPT conversation until validation passes or the iteration limit is reached.
+description: Delegate coding work to ChatGPT Web, then independently validate the resulting GitHub branch in either the opened local project or a matching remote repository discovered by Git origin from .chatgpt-worker.toml.
 ---
 
 # ChatGPT Worker
 
 Use Antigravity as the orchestrator and reviewer. Use ChatGPT Web as the coding worker.
 
-## Inputs to establish
+The currently opened Antigravity project folder is the source of project identity.
 
-Infer these from the current workspace and user request whenever possible. Do not ask for values that are already available.
+## Mandatory project discovery
 
-- GitHub repository.
+Before delegating a task, locate the Git root of the opened project and read .chatgpt-worker.toml from that repository root.
+
+Prefer the bundled helpers:
+
+    PLUGIN_ROOT="$HOME/.gemini/config/plugins/chatgpt-worker"
+    "$PLUGIN_ROOT/scripts/doctor.sh" "$PWD"
+    "$PLUGIN_ROOT/scripts/discover.py" --project "$PWD" --json
+
+Do not guess the execution target when discovery is available.
+
+The configuration selects one mode:
+
+- execution = "local": validate in the opened local repository/worktree on the Mac.
+- execution = "remote": use the configured SSH host and repo_roots; discover the remote repository by matching its normalized Git origin to the opened local repository's normalized origin.
+
+For remote mode, never select a repository only because its directory name matches. Git-origin equality is the identity check. If zero or multiple matching remote repositories are found, stop and report the discovery error.
+
+## Configuration
+
+Local project example:
+
+    execution = "local"
+    branch_prefix = "chatgpt-worker/"
+    max_iterations = 5
+
+    [validation]
+    commands = [
+      "npm run typecheck",
+      "npm test",
+      "npm run build",
+    ]
+
+Remote project example:
+
+    execution = "remote"
+    branch_prefix = "chatgpt-worker/"
+    max_iterations = 5
+
+    [remote]
+    host = "ai-server"
+    repo_roots = [
+      "/mnt/omv/git",
+      "/home/broliang/git",
+    ]
+
+    [validation]
+    commands = [
+      "pytest -q",
+      "ruff check .",
+    ]
+
+The SSH alias itself belongs in ~/.ssh/config, not in the repository configuration.
+
+## Inputs to establish automatically
+
+Infer these from the opened project, its Git metadata, .chatgpt-worker.toml, and the user request whenever possible:
+
+- GitHub repository from git remote get-url origin.
 - Task description and acceptance criteria.
-- Task branch. Prefer `chatgpt-worker/<short-task-name>`.
-- Remote SSH host. Default to `CHATGPT_WORKER_HOST`, otherwise `ai-server`.
-- Remote validation checkout/worktree path.
-- Validation commands: tests, type checking, linting, build, or task-specific checks.
-- Maximum repair iterations. Default to 5 unless the user specifies otherwise.
+- Task branch, using branch_prefix.
+- Execution mode.
+- Local or discovered remote validation repository.
+- Validation commands.
+- Maximum repair iterations.
+
+Do not ask the user for values already discoverable from the project.
 
 ## Workflow
 
-1. Inspect the local project context needed to formulate a precise coding task.
-2. Use Antigravity's native browser to open ChatGPT Web. Reuse the same conversation throughout a task.
-3. Tell ChatGPT exactly which GitHub repository and task branch to modify. Give acceptance criteria and relevant constraints. Instruct it to use its connected GitHub capability to make the changes and report the resulting commit SHA when finished.
-4. Never provide ChatGPT Web with SSH keys, tokens, cookies, passwords, or unrelated secrets.
-5. After ChatGPT reports completion, validate independently on Linux:
-   - connect through SSH;
-   - enter the designated validation checkout/worktree;
-   - fetch the remote repository;
-   - update/reset the validation worktree to the task branch as configured for that project;
-   - record the tested commit SHA;
-   - inspect the diff from the previous tested SHA when available;
-   - run the configured validation commands.
-6. Perform a semantic review in addition to mechanical tests. Check that the implementation satisfies the request, avoids unrelated changes, does not weaken tests merely to obtain a pass, and handles obvious failure paths.
-7. If validation fails, send one concise feedback message to the SAME ChatGPT Web conversation containing:
-   - tested commit SHA;
-   - failing command(s);
-   - relevant error/output excerpts;
-   - specific semantic review findings;
-   - a request to fix the problems in the same task branch and report the new commit SHA.
-8. Fetch and validate again. Repeat until validation passes or the maximum iteration count is reached.
-9. Do not merge automatically unless the user explicitly requests merging. A passing result means "ready for user/PR/merge review", not permission to merge.
-10. Finish with a concise report: branch, final commit, iterations, commands run, pass/fail status, and any remaining concerns.
+1. Run project discovery and verify the execution target is READY.
+2. Inspect only the project context needed to formulate a precise coding task.
+3. Use Antigravity's native browser to open ChatGPT Web. Reuse the same conversation throughout the task.
+4. Tell ChatGPT exactly which GitHub repository and task branch to modify. Give acceptance criteria and relevant constraints. Instruct it to use its connected GitHub capability to make the changes and report the resulting commit SHA when finished.
+5. Never provide ChatGPT Web with SSH keys, tokens, cookies, passwords, or unrelated secrets.
+6. After ChatGPT reports completion, independently fetch and validate the task branch in the configured execution environment.
+7. Record the exact tested commit SHA and inspect the diff from the previous tested SHA when available.
+8. Run every configured validation command.
+9. Perform a semantic review in addition to mechanical tests. Check that the implementation satisfies the request, avoids unrelated changes, does not weaken tests merely to obtain a pass, and handles obvious failure paths.
+10. If validation fails, send one concise feedback message to the SAME ChatGPT Web conversation containing the tested commit SHA, failing commands, relevant error excerpts, review findings, and a request to fix the same task branch.
+11. Fetch and validate again. Repeat until validation passes or max_iterations is reached.
+12. Do not merge automatically unless the user explicitly requests merging.
+13. Finish with a concise report: execution target, branch, final commit, iterations, commands run, pass/fail status, and remaining concerns.
+
+## Local execution
+
+When execution = "local", the opened repository is the validation source repository.
+
+Prefer a disposable task worktree instead of changing the user's opened working tree. Do not discard local uncommitted work.
+
+Default worktree root:
+
+    ~/.cache/chatgpt-worker/worktrees/<repo>/<task>
+
+Fetch the remote branch, create or refresh the disposable worktree, and run validation there.
 
 ## Remote execution
 
-Prefer the bundled helper when available:
+When execution = "remote", use target_host and target_repo returned by discover.py.
 
-```bash
-bash scripts/remote.sh repo /path/to/worktree git status --short
-bash scripts/remote.sh test /path/to/worktree 'pytest -q'
-```
+Prefer the bundled SSH helper:
 
-For multi-step synchronization, use explicit safe Git commands appropriate to the repository. Do not discard unrelated user work. A dedicated disposable validation worktree is strongly preferred.
+    bash "$PLUGIN_ROOT/scripts/remote.sh" --host <host> repo <target_repo> git status --short
+
+Use a disposable validation worktree. Do not alter unrelated work in the normal remote checkout.
+
+Before using a remote candidate, discovery must verify that its normalized Git origin equals the opened local project's normalized Git origin.
 
 ## Feedback format
 
-Keep repair messages compact. Include the smallest useful error excerpts rather than dumping entire logs. When a failure strongly indicates a source location, mention it, but let ChatGPT investigate the implementation.
+Keep repair messages compact. Include the smallest useful error excerpts rather than dumping entire logs.
 
 ## Stop conditions
 
 Stop and report instead of continuing when:
 
+- .chatgpt-worker.toml is missing or invalid;
+- remote execution is selected but SSH cannot connect;
+- zero or multiple remote repositories match the local Git origin;
 - the maximum iteration count is reached;
 - authentication or repository access is unavailable;
 - the requested branch cannot be identified safely;
