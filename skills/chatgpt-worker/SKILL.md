@@ -39,16 +39,23 @@ Use the returned project root and concrete SSH aliases to guide setup.
 
 Ask the user only for information that cannot be inferred safely.
 
-For every new project, first ask whether execution should be:
+For every new project, ask two independent choices:
 
-- local: validation/worktrees run on the Mac;
-- remote: validation/worktrees run on a remote machine over SSH.
+1. execution:
+   - local: validation/worktrees run on the Mac;
+   - remote: validation/worktrees run on a remote machine over SSH.
+2. browser transport:
+   - manual: prepare the wake-up message but require the user to paste/send it;
+   - native: use CDP only to reload the existing ChatGPT page and insert the text, then use the UI.Vision `ChatGPTClickSendExistingTab` macro to perform the final `XClick`;
+   - cdp: use `send_message.js` for reload, insertion, send, and DOM verification.
+
+Do not describe native as undetectable or human-equivalent; it is still automation.
 
 If the user chooses local:
 
 1. optionally inspect the project for likely validation commands;
 2. ask which validation commands should be used only when they are not obvious or the user wants custom commands;
-3. write `.chatgpt-worker.toml` with `configure.py write --execution local`;
+3. write `.chatgpt-worker.toml` with `configure.py write --execution local --browser-transport <manual|native|cdp>`;
 4. keep the default branch prefix, max iterations, and communication settings unless the user asks to change them;
 5. run doctor again and continue only when READY.
 
@@ -60,16 +67,18 @@ If the user chooses remote:
 4. ask for one or more remote repo roots to search, unless they can be inferred from a clearly established convention;
 5. ask for optional remote-to-local path mappings when relevant. For the known shared OMV mount, a typical mapping is `/mnt/omv=/Volumes/omv`;
 6. optionally inspect the project for likely validation commands and ask only when necessary;
-7. write `.chatgpt-worker.toml` with `configure.py write --execution remote --host ... --repo-root ...`;
+7. write `.chatgpt-worker.toml` with `configure.py write --execution remote --host ... --repo-root ... --browser-transport <manual|native|cdp>`;
 8. run doctor again and continue only when READY.
 
 Do not invent an SSH alias, repo root, or path mapping. Do not overwrite an existing config without explicit user approval.
 
 Example write commands:
 
-    "$PLUGIN_ROOT/scripts/configure.py" write       --project "$PWD"       --execution local       --validation-command "npm test"
+    "$PLUGIN_ROOT/scripts/configure.py" write --project "$PWD" --execution local --browser-transport manual --validation-command "npm test"
 
-    "$PLUGIN_ROOT/scripts/configure.py" write       --project "$PWD"       --execution remote       --host ai-server       --repo-root /mnt/omv/git       --path-mapping /mnt/omv=/Volumes/omv       --validation-command "pytest -q"
+    "$PLUGIN_ROOT/scripts/configure.py" write --project "$PWD" --execution local --browser-transport native --uivision-autorun-html "$HOME/uivision/ui.vision.html" --validation-command "npm test"
+
+    "$PLUGIN_ROOT/scripts/configure.py" write --project "$PWD" --execution remote --host ai-server --repo-root /mnt/omv/git --path-mapping /mnt/omv=/Volumes/omv --browser-transport cdp --validation-command "pytest -q"
 
 After writing the file, always run:
 
@@ -197,50 +206,50 @@ Browser wake-up messages should be short and stable, for example:
 
 Do not parse the browser reply to determine completion. Do not ask the user to send the wake-up message or to reply "check response". Antigravity must use its browser capability to send the wake-up message itself, then use the Git watcher to detect completion.
 
-## Autonomous browser handoff
+## Browser transport modes
 
-Antigravity must automate the ChatGPT Web interaction itself without manual human relay.
+The selected `[browser].transport` in `.chatgpt-worker.toml` controls how wake-up messages are sent.
 
-### Crucial Reliability Requirements:
-1. **Auto-Approve Remote Debugging Prompt (`auto_allow`)**:
-   Modern Chrome prompts for consent ("Allow remote debugging? An external app wants full control...") when an external CDP client attaches.
-   Ensure the background auto-approval daemon is running:
-   ```bash
-   bash "$PLUGIN_ROOT/scripts/auto_allow.sh" start
-   ```
-   This silently and automatically clicks "Allow" within 500ms using the macOS Accessibility API, preventing popup interruptions.
+### manual
 
-2. **Always Refresh Page Before Sending (`location.reload()`)**:
-   ChatGPT Web's ProseMirror editor, active WebSocket connection, and DOM tokens frequently enter a stale or frozen state if left idle.
-   The bundled messenger script **always reloads the page first**, waits for `#prompt-textarea` to mount cleanly, injects the text via CDP `Input.insertText`, and clicks send.
+`lifecycle.py message --send` prints structured output with `manual_required=true` and the exact wake-up message. Do not automate the page in this mode. Ask the user to paste/send the prepared message, then continue with Git polling.
 
-3. **Direct CLI Automation (No Subagent Research Loops)**:
-   Do NOT spawn open-ended subagents to research Chrome DevTools Protocol or reverse-engineer DOM elements. Use the bundled, battle-tested script:
-   ```bash
-   # Send wake-up via lifecycle helper:
-   python3 "$PLUGIN_ROOT/scripts/lifecycle.py" message --state-file <state-file> --send
+### native
 
-   # Or execute the script directly:
-   node "$PLUGIN_ROOT/scripts/send_message.js" "<wake-up message>"
-   ```
+Use the bundled native transport:
 
-4. **Verify Submission & Poll Git**:
-   After sending the message, `send_message.js` verifies that the message was accepted by the ChatGPT DOM. Control then returns to the main orchestrator to poll Git:
-   ```bash
-   python3 "$PLUGIN_ROOT/scripts/lifecycle.py" wait-response --state-file <state-file>
-   ```
+    python3 "$PLUGIN_ROOT/scripts/lifecycle.py" message --state-file <state-file> --send
 
-5. Treat completion as valid only when:
-   - the remote task branch has advanced beyond the request commit;
-   - the corresponding committed response JSON exists;
-   - response status is `completed`;
-   - `finished` is `true`;
-   - `finish_message` is non-empty;
-   - `implementation_commit` exists and is reachable from the task branch.
+Internally it:
 
-Browser-visible prose such as "done" is not sufficient.
+1. runs `send_message.js --prepare-only`;
+2. attaches to the existing ChatGPT tab through CDP;
+3. reloads the page and inserts the wake-up text;
+4. intentionally does NOT click Send in CDP;
+5. launches UI.Vision autorun;
+6. UI.Vision macro `ChatGPTClickSendExistingTab` selects the already-open ChatGPT tab and performs `XClick` on the enabled send button;
+7. waits for the UI.Vision macro log to report completion.
 
-If `wait-response` times out, check the ChatGPT Web conversation tab in Chrome. If ChatGPT is still generating, extend the wait timeout. If it is blocked by authentication or an explicit user confirmation dialog, report that specific blocker. Do not ask the user to perform routine relay/polling steps.
+The macro is maintained in `xwzliang/my_uivision/chatgpt/chatgpt_click_send_existing_tab.json`. It must be installed into the user's UI.Vision macro directory, for example by running that repository's `install.sh`.
+
+The UI.Vision autorun HTML can be configured with:
+
+    [browser]
+    transport = "native"
+    uivision_autorun_html = "/Users/you/uivision/ui.vision.html"
+    uivision_macro_name = "ChatGPTClickSendExistingTab"
+
+If the HTML path is omitted, the helper also checks `$UIV_HTML`, `$UIVISION_AUTORUN_HTML`, `~/uivision/ui.vision.html`, and `~/Desktop/uivision/ui.vision.html`.
+
+### cdp
+
+Use the existing direct CDP messenger. It reloads, inserts text, clicks Send, and verifies delivery in the DOM.
+
+Regardless of transport, browser-visible prose is never authoritative completion. After sending, use:
+
+    python3 "$PLUGIN_ROOT/scripts/lifecycle.py" wait-response --state-file <state-file>
+
+Completion is valid only when the Git branch advances and the committed response JSON passes protocol validation.
 
 ## Automatic lifecycle
 
@@ -292,7 +301,7 @@ The `finish` command updates session state, pushes it, removes disposable worktr
 1. Run discovery/doctor and formulate the initial task.
 2. Write the full task into a temporary request body file.
 3. Run `lifecycle.py start`; capture the returned state file, task branch, session ID, and request ID.
-4. Ensure `auto_allow` daemon is running (`bash "$PLUGIN_ROOT/scripts/auto_allow.sh" start`), then send the wake-up message to ChatGPT Web using `python3 "$PLUGIN_ROOT/scripts/lifecycle.py" message --state-file <state-file> --send` (or `node "$PLUGIN_ROOT/scripts/send_message.js"`). The script automatically reloads the page first, types, and sends. Never ask the user to relay it.
+4. Send the wake-up message with `lifecycle.py message --state-file <state-file> --send`. This automatically routes through the configured manual/native/cdp transport. For manual mode, stop for the required user paste/send; for native/cdp, do not ask for routine relay.
 5. Run `lifecycle.py wait-response` to poll Git until a new committed finished response is detected. Never ask the user to say "check response".
 6. Once completed, run `prepare-validation` and `validate`.
 7. Perform semantic review of the exact implementation commit.
