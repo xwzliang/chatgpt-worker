@@ -84,7 +84,7 @@ else
   git clone "$REPO_URL" "$DEST" >/dev/null
 fi
 
-chmod +x "$DEST/install.sh" "$DEST/scripts/remote.sh" 2>/dev/null || true
+chmod +x "$DEST/install.sh" "$DEST/scripts/"*.sh "$DEST/scripts/"*.py 2>/dev/null || true
 
 relaunch_antigravity_macos() {
   if [[ "$(uname -s)" != "Darwin" ]]; then
