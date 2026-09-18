@@ -9,3 +9,7 @@ commands = [
   "npm test",
   "npm run build",
 ]
+[communication]
+runtime_dir = ".chatgpt-worker"
+retain_on_merge = false
+
