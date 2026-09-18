@@ -56,8 +56,9 @@ def load_config(repo: pathlib.Path) -> tuple[pathlib.Path, dict]:
     return path, cfg
 
 def remote_exec(host: str, script: str) -> subprocess.CompletedProcess:
+    remote_command = "bash -lc " + shlex.quote(script)
     return subprocess.run(
-        ["ssh", "-o", "BatchMode=yes", "-o", "ConnectTimeout=8", host, "bash", "-lc", script],
+        ["ssh", "-o", "BatchMode=yes", "-o", "ConnectTimeout=8", host, remote_command],
         text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE
     )
 
