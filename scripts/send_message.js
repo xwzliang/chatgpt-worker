@@ -24,9 +24,12 @@ function sleep(ms) {
 
 // Parse command-line arguments
 let message = '';
+let prepareOnly = false;
 for (let i = 2; i < process.argv.length; i++) {
     const arg = process.argv[i];
-    if (arg === '--file' || arg === '-f') {
+    if (arg === '--prepare-only') {
+        prepareOnly = true;
+    } else if (arg === '--file' || arg === '-f') {
         const filePath = process.argv[++i];
         if (!filePath || !fs.existsSync(filePath)) {
             console.error(`Error: file not found: ${filePath}`);
@@ -34,8 +37,8 @@ for (let i = 2; i < process.argv.length; i++) {
         }
         message = fs.readFileSync(filePath, 'utf-8');
     } else if (arg === '--help' || arg === '-h') {
-        console.log('Usage: node send_message.js "<message>"');
-        console.log('       node send_message.js --file <file_path>');
+        console.log('Usage: node send_message.js [--prepare-only] "<message>"');
+        console.log('       node send_message.js [--prepare-only] --file <file_path>');
         process.exit(0);
     } else if (!message) {
         message = arg;
@@ -43,7 +46,7 @@ for (let i = 2; i < process.argv.length; i++) {
 }
 
 if (!message || !message.trim()) {
-    console.error('Usage: node send_message.js "<message>" or node send_message.js --file <file_path>');
+    console.error('Usage: node send_message.js [--prepare-only] "<message>" or node send_message.js [--prepare-only] --file <file_path>');
     process.exit(1);
 }
 
@@ -225,6 +228,12 @@ async function main() {
     console.log('=== Inserting message payload ===');
     await send('Input.insertText', { text: message.trim() }, sessionId);
     await sleep(800);
+
+    if (prepareOnly) {
+        console.log('>>> PREPARED: Message inserted; send button intentionally not clicked. <<<');
+        ws.close();
+        process.exit(0);
+    }
 
     // 7. Click send button or dispatch Enter
     console.log('=== Submitting message ===');
