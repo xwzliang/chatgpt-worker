@@ -128,6 +128,8 @@ def start(args):
 
     task_slug = slug(args.task_slug or args.task)
     branch = args.branch or f"{info['branch_prefix']}{task_slug}"
+    if not branch.startswith(info["branch_prefix"]):
+        raise RuntimeError(f"task branch must start with configured branch_prefix {info['branch_prefix']!r}")
     paths = task_paths(info, task_slug)
     source_repo = pathlib.Path(info["project_root"])
     base_branch = origin_default_branch(source_repo)
@@ -171,6 +173,7 @@ def start(args):
         "validation_worktree": None,
         "request_commit": request_commit,
         "last_implementation_commit": None,
+        "implementation_commits": [],
         "target_host": info.get("target_host"),
         "target_repo": info.get("target_repo"),
         "validation_commands": info.get("validation_commands", []),
@@ -217,6 +220,9 @@ def response(args):
     if git(control, "merge-base", "--is-ancestor", impl, f"origin/{state['task_branch']}", check=False).returncode != 0:
         raise RuntimeError(f"implementation commit is not reachable from origin/{state['task_branch']}: {impl}")
     state["last_implementation_commit"] = impl
+    commits = state.setdefault("implementation_commits", [])
+    if impl not in commits:
+        commits.append(impl)
     save_state(state_path, state)
     print(json.dumps({"ok": True, "ready": True, "implementation_commit": impl, "response": resp}, indent=2))
 
@@ -330,6 +336,61 @@ def next_request(args):
     save_state(state_path,state)
     print(json.dumps({"ok":True,"request_id":rid,"request_commit":commit,"session_id":state["session_id"],"task_branch":state["task_branch"]},indent=2))
 
+def prepare_delivery(args):
+    state_path = pathlib.Path(args.state_file).expanduser()
+    state = load_state(state_path)
+    source = pathlib.Path(state["project_root"])
+    commits = state.get("implementation_commits", [])
+    if not commits:
+        raise RuntimeError("no implementation commits recorded")
+
+    delivery_branch = args.branch or f"{state['task_branch']}-delivery"
+    if delivery_branch == state["task_branch"]:
+        raise RuntimeError("delivery branch must differ from the audit/task branch")
+
+    git(source, "fetch", "origin")
+    base_ref = f"origin/{state['base_branch']}"
+    paths = task_paths({"origin": state["origin"]}, state["task_slug"])
+    delivery = cache_root() / "delivery" / slug(state["origin"].replace("/", "__")) / state["task_slug"]
+
+    git(source, "worktree", "prune")
+    if delivery.exists():
+        git(source, "worktree", "remove", "--force", str(delivery), check=False)
+    if git(source, "show-ref", "--verify", "--quiet", f"refs/heads/{delivery_branch}", check=False).returncode == 0:
+        git(source, "branch", "-D", delivery_branch)
+    git(source, "worktree", "add", "-b", delivery_branch, str(delivery), base_ref)
+
+    try:
+        for commit in commits:
+            git(delivery, "cherry-pick", commit)
+        # Communication runtime must never leak into the delivery branch.
+        runtime = delivery / ".chatgpt-worker"
+        if runtime.exists():
+            shutil.rmtree(runtime)
+            git(delivery, "add", "-A")
+            if git(delivery, "status", "--porcelain").stdout.strip():
+                git(delivery, "commit", "-m", "chatgpt-worker: exclude runtime communication from delivery")
+        git(delivery, "push", "-u", "origin", delivery_branch)
+        head = git(delivery, "rev-parse", "HEAD").stdout.strip()
+    except Exception:
+        git(delivery, "cherry-pick", "--abort", check=False)
+        raise
+    finally:
+        git(source, "worktree", "remove", "--force", str(delivery), check=False)
+        git(source, "worktree", "prune", check=False)
+
+    state["delivery_branch"] = delivery_branch
+    state["delivery_commit"] = head
+    save_state(state_path, state)
+    print(json.dumps({
+        "ok": True,
+        "delivery_branch": delivery_branch,
+        "delivery_commit": head,
+        "base_branch": state["base_branch"],
+        "implementation_commits": commits,
+        "communication_runtime_included": False,
+    }, indent=2))
+
 def finish(args):
     state_path=pathlib.Path(args.state_file).expanduser()
     state=load_state(state_path)
@@ -406,6 +467,11 @@ def main():
     n.add_argument("--type",default="validation_failure",choices=["implementation","validation_failure","review_feedback","clarification"])
     n.add_argument("--request-file",required=True)
     n.set_defaults(func=next_request)
+
+    d=sub.add_parser("prepare-delivery")
+    d.add_argument("--state-file",required=True)
+    d.add_argument("--branch")
+    d.set_defaults(func=prepare_delivery)
 
     f=sub.add_parser("finish")
     f.add_argument("--state-file",required=True)
