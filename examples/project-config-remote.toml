@@ -19,3 +19,7 @@ commands = [
   "pytest -q",
   "ruff check .",
 ]
+[communication]
+runtime_dir = ".chatgpt-worker"
+retain_on_merge = false
+
