@@ -201,18 +201,26 @@ Do not parse the browser reply to determine completion. Do not ask the user to s
 
 Antigravity must automate the ChatGPT Web interaction itself.
 
+IMPORTANT: Antigravity's browser subagent must be invoked explicitly with the literal `/browser` slash command. Do not merely "use browser capability" in prose.
+
 For each request:
 
-1. Use the browser subagent/browser capability to open or focus ChatGPT Web.
-2. Reuse the same ChatGPT Web conversation for the whole task whenever possible.
+1. Invoke the native browser subagent with a command in this form:
+
+       /browser Open or focus the existing ChatGPT Web conversation for this chatgpt-worker task. Send exactly the wake-up message provided below. Do not summarize or alter it. After sending it, return control to the main agent.
+
+   Include the compact wake-up message directly in that `/browser` instruction.
+2. Use the existing logged-in ChatGPT Web session/conversation whenever possible.
 3. Enter and send the compact wake-up message containing repository, task branch, session ID, and request ID.
 4. Do not ask the user to copy/paste this message.
 5. Do not ask the user to type "check response" after ChatGPT finishes.
-6. After sending the message, return to Git-based orchestration and run:
+6. NEVER use `osascript`, AppleScript, `open` plus keystrokes, shell scripts that type into Chrome, GUI scripting, accessibility keystroke automation, or other Bash-driven UI control as a substitute for `/browser`.
+7. If `/browser` is unavailable or fails to launch, stop and report that browser-subagent blocker instead of falling back to OS-level GUI automation.
+8. After sending the message, return to Git-based orchestration and run:
 
        "$LIFECYCLE" wait-response --state-file <state-file>
 
-7. Treat completion as valid only when:
+9. Treat completion as valid only when:
    - the remote task branch has advanced beyond the request commit;
    - the corresponding committed response JSON exists;
    - response status is `completed`;
@@ -274,7 +282,7 @@ The `finish` command updates session state, pushes it, removes disposable worktr
 1. Run discovery/doctor and formulate the initial task.
 2. Write the full task into a temporary request body file.
 3. Run `lifecycle.py start`; capture the returned state file, task branch, session ID, and request ID.
-4. Use Antigravity's browser capability to send the compact wake-up message to the same ChatGPT Web conversation. Never ask the user to relay it.
+4. Invoke Antigravity's literal `/browser` slash command to send the compact wake-up message to the same ChatGPT Web conversation. Never ask the user to relay it, and never substitute `osascript`/AppleScript/shell GUI automation.
 5. Run `lifecycle.py wait-response` to poll Git until a new committed finished response is detected. Never ask the user to say "check response".
 6. Once completed, run `prepare-validation` and `validate`.
 7. Perform semantic review of the exact implementation commit.
