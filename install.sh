@@ -139,6 +139,7 @@ fi
 
 echo
 echo "Next steps:"
-echo "  1. Configure ~/.ssh/config (see examples/ssh-config.example)."
-echo "  2. Optionally export CHATGPT_WORKER_HOST=<ssh-alias>."
-echo "  3. Invoke /chatgpt-worker or ask Antigravity to delegate a coding task to ChatGPT Web."
+echo "  1. Add .chatgpt-worker.toml to each project (see examples/project-config-*.toml)."
+echo "  2. For remote projects, configure the SSH alias in ~/.ssh/config."
+echo "  3. From the opened project, run: $DEST/scripts/doctor.sh"
+echo "  4. Invoke /chatgpt-worker or ask Antigravity to delegate a coding task to ChatGPT Web."
