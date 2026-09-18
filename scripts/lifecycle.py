@@ -118,8 +118,8 @@ def commit_and_push(repo: pathlib.Path, branch: str, message: str):
     git(repo, "push", "-u", "origin", branch)
     return git(repo, "rev-parse", "HEAD").stdout.strip()
 
-def protocol_cmd(control: pathlib.Path, *args: str):
-    return run([sys.executable, str(PROTOCOL), *args, "--repo", str(control)])
+def protocol_cmd(control: pathlib.Path, *args: str, check: bool = True):
+    return run([sys.executable, str(PROTOCOL), *args, "--repo", str(control)], check=check)
 
 def start(args):
     info = discover.discover(args.project)
@@ -203,7 +203,10 @@ def response(args):
         "--session-id", state["session_id"],
         "--request-id", state["current_request"],
         "--json",
+        check=False,
     )
+    if p.returncode not in {0, 2, 3}:
+        raise RuntimeError((p.stderr or "").strip() or "response check failed")
     data = json.loads(p.stdout)
     if not data.get("ready"):
         print(json.dumps(data, indent=2))
@@ -428,6 +431,20 @@ def cleanup_worktrees(state: dict[str, Any]):
         git(source,"worktree","remove","--force",str(control),check=False)
     git(source,"worktree","prune",check=False)
 
+def status(args):
+    state_path = pathlib.Path(args.state_file).expanduser()
+    state = load_state(state_path)
+    result = dict(state)
+    result["state_file"] = str(state_path)
+    control = pathlib.Path(state.get("control_worktree", ""))
+    result["control_worktree_exists"] = bool(control and control.exists())
+    if state.get("execution") == "local":
+        vw = state.get("validation_worktree")
+        result["validation_worktree_exists"] = bool(vw and pathlib.Path(vw).exists())
+    else:
+        result["validation_worktree_exists"] = None
+    print(json.dumps({"ok": True, **result}, indent=2))
+
 def cleanup(args):
     state_path=pathlib.Path(args.state_file).expanduser()
     state=load_state(state_path)
@@ -477,6 +494,10 @@ def main():
     f.add_argument("--state-file",required=True)
     f.add_argument("--status",default="completed",choices=["completed","failed","stopped"])
     f.set_defaults(func=finish)
+
+    st=sub.add_parser("status")
+    st.add_argument("--state-file",required=True)
+    st.set_defaults(func=status)
 
     c=sub.add_parser("cleanup")
     c.add_argument("--state-file",required=True)
