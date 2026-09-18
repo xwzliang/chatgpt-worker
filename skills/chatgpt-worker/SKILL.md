@@ -195,7 +195,34 @@ Browser wake-up messages should be short and stable, for example:
     Read .chatgpt-worker/PROTOCOL.md and the pending request file in the repository.
     Make the requested code changes, commit and push them, then write the corresponding response JSON file.
 
-Do not parse the browser reply to determine completion. Fetch/pull the task branch and inspect the response JSON instead.
+Do not parse the browser reply to determine completion. Do not ask the user to send the wake-up message or to reply "check response". Antigravity must use its browser capability to send the wake-up message itself, then use the Git watcher to detect completion.
+
+## Autonomous browser handoff
+
+Antigravity must automate the ChatGPT Web interaction itself.
+
+For each request:
+
+1. Use the browser subagent/browser capability to open or focus ChatGPT Web.
+2. Reuse the same ChatGPT Web conversation for the whole task whenever possible.
+3. Enter and send the compact wake-up message containing repository, task branch, session ID, and request ID.
+4. Do not ask the user to copy/paste this message.
+5. Do not ask the user to type "check response" after ChatGPT finishes.
+6. After sending the message, return to Git-based orchestration and run:
+
+       "$LIFECYCLE" wait-response --state-file <state-file>
+
+7. Treat completion as valid only when:
+   - the remote task branch has advanced beyond the request commit;
+   - the corresponding committed response JSON exists;
+   - response status is `completed`;
+   - `finished` is `true`;
+   - `finish_message` is non-empty;
+   - `implementation_commit` exists and is reachable from the task branch.
+
+Browser-visible prose such as "done" is not sufficient.
+
+If `wait-response` times out, inspect the same ChatGPT Web conversation with the browser. If ChatGPT is still working, continue waiting. If it is blocked by authentication, a permission prompt, a tool failure, or a real ambiguity requiring user input, report that specific blocker. Do not ask the user to perform routine relay/polling steps.
 
 ## Automatic lifecycle
 
@@ -217,6 +244,8 @@ Typical commands:
     "$LIFECYCLE" status --state-file <state-file>
 
     "$LIFECYCLE" response --state-file <state-file>
+
+    "$LIFECYCLE" wait-response --state-file <state-file>
 
     "$LIFECYCLE" prepare-validation --state-file <state-file>
 
@@ -245,12 +274,12 @@ The `finish` command updates session state, pushes it, removes disposable worktr
 1. Run discovery/doctor and formulate the initial task.
 2. Write the full task into a temporary request body file.
 3. Run `lifecycle.py start`; capture the returned state file, task branch, session ID, and request ID.
-4. Wake ChatGPT Web with only repository, task branch, session ID, and request ID.
-5. Call `lifecycle.py response` after fetching is appropriate. If `ready=false`, keep the task pending rather than parsing browser prose.
+4. Use Antigravity's browser capability to send the compact wake-up message to the same ChatGPT Web conversation. Never ask the user to relay it.
+5. Run `lifecycle.py wait-response` to poll Git until a new committed finished response is detected. Never ask the user to say "check response".
 6. Once completed, run `prepare-validation` and `validate`.
 7. Perform semantic review of the exact implementation commit.
-8. If validation/review fails, write concise feedback to a temporary file and call `next-request`, then wake the same ChatGPT conversation with the new request ID.
-9. Repeat until validation and semantic review pass or max_iterations is reached.
+8. If validation/review fails, write concise feedback to a temporary file, call `next-request`, use the browser to send the new wake-up message, then run `wait-response` again.
+9. Repeat autonomously until validation and semantic review pass or max_iterations is reached.
 10. If code is ready for integration, call `prepare-delivery` to produce a communication-free delivery branch.
 11. Do not merge automatically unless the user explicitly requests merging.
 12. Call `finish` with completed/failed/stopped to persist final session status and remove disposable worktrees.
