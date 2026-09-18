@@ -72,6 +72,14 @@ Remote projects may also define path mappings for storage mounted at different p
 
 Treat these paths as the same underlying storage. When a remote job creates an image, video, audio file, log, report, or other artifact under a mapped remote prefix, translate it to the local path and inspect/read it directly from macOS when that is more convenient. Do not copy the file over SSH merely to inspect it if the mapped local mount is available.
 
+Project configuration may also define the Git-backed communication runtime:
+
+    [communication]
+    runtime_dir = ".chatgpt-worker"
+    retain_on_merge = false
+
+The current design requires retain_on_merge = false: communication history lives on the task branch and should not be retained on the default branch when code is merged.
+
 ## Inputs to establish automatically
 
 Infer these from the opened project, its Git metadata, .chatgpt-worker.toml, and the user request whenever possible:
@@ -87,21 +95,62 @@ Infer these from the opened project, its Git metadata, .chatgpt-worker.toml, and
 
 Do not ask the user for values already discoverable from the project.
 
+## Git-backed communication protocol
+
+The authoritative Antigravity ↔ ChatGPT Web communication channel is Git on the task branch, not prose scraped from the browser UI.
+
+For each task:
+
+1. Create or select a dedicated task branch using branch_prefix.
+2. Ensure the task branch contains the runtime directory (default `.chatgpt-worker/`).
+3. Copy the canonical protocol from the installed plugin's `protocol/PROTOCOL.md` to `.chatgpt-worker/PROTOCOL.md` on the task branch.
+4. Create one session under `.chatgpt-worker/sessions/<session-id>/`.
+5. Append immutable request files under `requests/NNNN.md`.
+6. Require ChatGPT Web to append the matching `responses/NNNN.json`.
+7. Treat the Git response file as authoritative. Browser prose is only a wake-up/control signal.
+8. Never create or maintain runtime communication files on the default branch.
+9. On merge, omit/remove the runtime communication directory from the default branch because retain_on_merge is false. The task branch remains the audit trail.
+
+Prefer the bundled protocol helper:
+
+    "$PLUGIN_ROOT/scripts/protocol.py" init-session ...
+    "$PLUGIN_ROOT/scripts/protocol.py" add-request ...
+    "$PLUGIN_ROOT/scripts/protocol.py" check-response ...
+
+Browser wake-up messages should be short and stable, for example:
+
+    Continue the chatgpt-worker task.
+
+    Repository: <owner/repo>
+    Branch: <task-branch>
+    Session: <session-id>
+    Next request: <NNNN>
+
+    Read .chatgpt-worker/PROTOCOL.md and the pending request file in the repository.
+    Make the requested code changes, commit and push them, then write the corresponding response JSON file.
+
+Do not parse the browser reply to determine completion. Fetch/pull the task branch and inspect the response JSON instead.
+
 ## Workflow
 
 1. Run project discovery and verify the execution target is READY.
 2. Inspect only the project context needed to formulate a precise coding task.
-3. Use Antigravity's native browser to open ChatGPT Web. Reuse the same conversation throughout the task.
-4. Tell ChatGPT exactly which GitHub repository and task branch to modify. Give acceptance criteria and relevant constraints. Instruct it to use its connected GitHub capability to make the changes and report the resulting commit SHA when finished.
-5. Never provide ChatGPT Web with SSH keys, tokens, cookies, passwords, or unrelated secrets.
-6. After ChatGPT reports completion, independently fetch and validate the task branch in the configured execution environment.
-7. Record the exact tested commit SHA and inspect the diff from the previous tested SHA when available.
-8. Run every configured validation command.
-9. Perform a semantic review in addition to mechanical tests. Check that the implementation satisfies the request, avoids unrelated changes, does not weaken tests merely to obtain a pass, and handles obvious failure paths.
-10. If validation fails, send one concise feedback message to the SAME ChatGPT Web conversation containing the tested commit SHA, failing commands, relevant error excerpts, review findings, and a request to fix the same task branch.
-11. Fetch and validate again. Repeat until validation passes or max_iterations is reached.
-12. Do not merge automatically unless the user explicitly requests merging.
-13. Finish with a concise report: execution target, branch, final commit, iterations, commands run, pass/fail status, and remaining concerns.
+3. Create/select the dedicated task branch. Do not use the default branch for communication runtime files.
+4. Initialize `.chatgpt-worker/` on that task branch, including `PROTOCOL.md`, session state, and request `0001.md`.
+5. Commit and push the request/runtime files to the task branch.
+6. Use Antigravity's native browser to open ChatGPT Web. Reuse the same conversation throughout the task.
+7. Send only the compact wake-up message containing repository, branch, session ID, and request ID.
+8. Wait by fetching/pulling the task branch until the corresponding response JSON appears. Do not use ChatGPT's browser prose as the completion signal.
+9. Parse and validate the response JSON. Verify the declared commit exists and belongs to the task branch.
+10. Independently fetch and validate the task branch in the configured execution environment.
+11. Record the exact tested commit SHA and inspect the code diff.
+12. Run every configured validation command and perform semantic review.
+13. If validation or review fails, append the next immutable request file describing the tested commit, failing commands, concise errors, and review findings. Commit/push it, then send another compact wake-up message.
+14. Repeat until validation passes or max_iterations is reached.
+15. Mark the session completed on the task branch.
+16. Do not merge automatically unless the user explicitly requests merging.
+17. When merging code, keep runtime communication files off the default branch. Preserve the task branch as the Git audit trail.
+18. Finish with a concise report: execution target, task branch, session ID, final commit, iterations, validation commands, pass/fail status, and remaining concerns.
 
 ## Local execution
 
