@@ -42,7 +42,7 @@ The installer places the plugin at:
 ~/.gemini/config/plugins/chatgpt-worker
 ```
 
-Running the installer again updates an existing Git-backed installation.
+Running the installer again updates an existing Git-backed installation. On macOS, the installer then gracefully quits and relaunches Antigravity IDE so the newly installed plugin is discovered immediately. Use `--no-relaunch` if you do not want this behavior.
 
 ### Antigravity CLI
 
