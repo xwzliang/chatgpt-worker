@@ -22,10 +22,18 @@ ChatGPT Web makes code changes through its GitHub connection. Antigravity indepe
 
 ### Antigravity IDE on macOS
 
+One-line install/update:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/xwzliang/chatgpt-worker/master/install.sh | bash
+```
+
+Or clone it first:
+
 ```bash
 git clone https://github.com/xwzliang/chatgpt-worker.git
 cd chatgpt-worker
-./install.sh
+bash install.sh
 ```
 
 The installer places the plugin at:
@@ -34,13 +42,17 @@ The installer places the plugin at:
 ~/.gemini/config/plugins/chatgpt-worker
 ```
 
-Rerun `./install.sh` to update an existing Git-backed installation.
+Running the installer again updates an existing Git-backed installation.
 
 ### Antigravity CLI
 
 ```bash
-./install.sh --cli
+git clone https://github.com/xwzliang/chatgpt-worker.git
+cd chatgpt-worker
+bash install.sh --cli
 ```
+
+This delegates installation to `agy plugin install`.
 
 ## Linux server setup
 
@@ -70,9 +82,9 @@ export CHATGPT_WORKER_HOST=my-server
 Examples:
 
 ```bash
-scripts/remote.sh exec uname -a
-scripts/remote.sh repo /srv/my-project git status --short
-scripts/remote.sh test /srv/my-project 'pytest -q'
+bash scripts/remote.sh exec uname -a
+bash scripts/remote.sh repo /srv/my-project git status --short
+bash scripts/remote.sh test /srv/my-project 'pytest -q'
 ```
 
 ## Recommended workflow
