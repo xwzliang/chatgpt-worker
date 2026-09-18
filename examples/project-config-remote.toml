@@ -3,6 +3,11 @@ execution = "remote"
 branch_prefix = "chatgpt-worker/"
 max_iterations = 5
 
+[browser]
+transport = "cdp" # manual | native | cdp
+# uivision_autorun_html = "/Users/you/uivision/ui.vision.html" # required/auto-detected for native
+# uivision_macro_name = "ChatGPTClickSendExistingTab"
+
 [remote]
 host = "ai-server"
 repo_roots = [
