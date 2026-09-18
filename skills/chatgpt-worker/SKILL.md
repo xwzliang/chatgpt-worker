@@ -64,6 +64,14 @@ Remote project example:
 
 The SSH alias itself belongs in ~/.ssh/config, not in the repository configuration.
 
+Remote projects may also define path mappings for storage mounted at different paths on Linux and macOS:
+
+    [[remote.path_mappings]]
+    remote = "/mnt/omv"
+    local = "/Volumes/omv"
+
+Treat these paths as the same underlying storage. When a remote job creates an image, video, audio file, log, report, or other artifact under a mapped remote prefix, translate it to the local path and inspect/read it directly from macOS when that is more convenient. Do not copy the file over SSH merely to inspect it if the mapped local mount is available.
+
 ## Inputs to establish automatically
 
 Infer these from the opened project, its Git metadata, .chatgpt-worker.toml, and the user request whenever possible:
@@ -74,6 +82,7 @@ Infer these from the opened project, its Git metadata, .chatgpt-worker.toml, and
 - Execution mode.
 - Local or discovered remote validation repository.
 - Validation commands.
+- Remote-to-local path mappings, when configured.
 - Maximum repair iterations.
 
 Do not ask the user for values already discoverable from the project.
@@ -117,6 +126,26 @@ Prefer the bundled SSH helper:
 Use a disposable validation worktree. Do not alter unrelated work in the normal remote checkout.
 
 Before using a remote candidate, discovery must verify that its normalized Git origin equals the opened local project's normalized Git origin.
+
+## Remote artifact path mapping
+
+When discovery returns path_mappings, interpret each pair as aliases for the same storage.
+
+Example:
+
+    /mnt/omv/resources/output/movie.mp4
+    ->
+    /Volumes/omv/resources/output/movie.mp4
+
+If a validation command or remote job reports an artifact under a mapped remote prefix:
+
+1. translate the longest matching remote prefix to its local prefix;
+2. verify the local path exists before using it;
+3. prefer local macOS inspection for images, video, audio, PDFs, generated reports, and other files when suitable;
+4. keep command execution on the configured execution machine unless the task specifically requires otherwise;
+5. if the local mount is unavailable, fall back to remote inspection or an explicit transfer rather than assuming the mapping is mounted.
+
+The helper scripts/path_translate.py can translate an individual remote path using the project config.
 
 ## Feedback format
 
