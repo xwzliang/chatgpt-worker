@@ -131,26 +131,64 @@ Browser wake-up messages should be short and stable, for example:
 
 Do not parse the browser reply to determine completion. Fetch/pull the task branch and inspect the response JSON instead.
 
+## Automatic lifecycle
+
+Use `scripts/lifecycle.py` as the primary branch/worktree orchestration interface. Do not switch the opened Antigravity repository onto the task branch.
+
+The lifecycle creates:
+
+- a local **control worktree** for the task/audit branch and Git communication files;
+- a disposable **validation worktree** pinned to each exact `implementation_commit`;
+- for remote projects, the validation worktree is created on the remote Linux machine;
+- a local state file under `~/.cache/chatgpt-worker/tasks/`.
+
+Typical commands:
+
+    LIFECYCLE="$PLUGIN_ROOT/scripts/lifecycle.py"
+
+    "$LIFECYCLE" start       --project "$PWD"       --task "<task description>"       --request-file /tmp/chatgpt-worker-request.md
+
+    "$LIFECYCLE" status --state-file <state-file>
+
+    "$LIFECYCLE" response --state-file <state-file>
+
+    "$LIFECYCLE" prepare-validation --state-file <state-file>
+
+    "$LIFECYCLE" validate --state-file <state-file>
+
+    "$LIFECYCLE" next-request       --state-file <state-file>       --type validation_failure       --request-file /tmp/chatgpt-worker-feedback.md
+
+    "$LIFECYCLE" prepare-delivery --state-file <state-file>
+
+    "$LIFECYCLE" finish --state-file <state-file> --status completed
+
+The `start` command automatically discovers the project, derives a task branch from `branch_prefix`, creates the control worktree, initializes the session, writes request 0001, commits it, and pushes the task branch.
+
+The `response` command fetches the task branch and returns a normal `ready: false` state when ChatGPT has not written the response yet. When the response exists, it validates the protocol and records the exact implementation commit.
+
+The `prepare-validation` command creates or refreshes a detached validation worktree at that exact implementation commit. The `validate` command runs the configured validation commands there.
+
+The `next-request` command appends validation/review feedback to the audit branch without touching the opened project.
+
+The `prepare-delivery` command creates and pushes a clean delivery branch from the original base branch by cherry-picking only recorded implementation commits. The communication runtime is excluded. Use this clean delivery branch for PR/merge when desired; the audit/task branch remains the complete communication history.
+
+The `finish` command updates session state, pushes it, removes disposable worktrees, and preserves the audit/task branch.
+
 ## Workflow
 
-1. Run project discovery and verify the execution target is READY.
-2. Inspect only the project context needed to formulate a precise coding task.
-3. Create/select the dedicated task branch. Do not use the default branch for communication runtime files.
-4. Initialize `.chatgpt-worker/` on that task branch, including `PROTOCOL.md`, session state, and request `0001.md`.
-5. Commit and push the request/runtime files to the task branch.
-6. Use Antigravity's native browser to open ChatGPT Web. Reuse the same conversation throughout the task.
-7. Send only the compact wake-up message containing repository, branch, session ID, and request ID.
-8. Wait by fetching/pulling the task branch until the corresponding response JSON appears. Do not use ChatGPT's browser prose as the completion signal.
-9. Parse and validate the response JSON. Verify the declared commit exists and belongs to the task branch.
-10. Independently fetch and validate the task branch in the configured execution environment.
-11. Record the exact tested commit SHA and inspect the code diff.
-12. Run every configured validation command and perform semantic review.
-13. If validation or review fails, append the next immutable request file describing the tested commit, failing commands, concise errors, and review findings. Commit/push it, then send another compact wake-up message.
-14. Repeat until validation passes or max_iterations is reached.
-15. Mark the session completed on the task branch.
-16. Do not merge automatically unless the user explicitly requests merging.
-17. When merging code, keep runtime communication files off the default branch. Preserve the task branch as the Git audit trail.
-18. Finish with a concise report: execution target, task branch, session ID, final commit, iterations, validation commands, pass/fail status, and remaining concerns.
+1. Run discovery/doctor and formulate the initial task.
+2. Write the full task into a temporary request body file.
+3. Run `lifecycle.py start`; capture the returned state file, task branch, session ID, and request ID.
+4. Wake ChatGPT Web with only repository, task branch, session ID, and request ID.
+5. Call `lifecycle.py response` after fetching is appropriate. If `ready=false`, keep the task pending rather than parsing browser prose.
+6. Once completed, run `prepare-validation` and `validate`.
+7. Perform semantic review of the exact implementation commit.
+8. If validation/review fails, write concise feedback to a temporary file and call `next-request`, then wake the same ChatGPT conversation with the new request ID.
+9. Repeat until validation and semantic review pass or max_iterations is reached.
+10. If code is ready for integration, call `prepare-delivery` to produce a communication-free delivery branch.
+11. Do not merge automatically unless the user explicitly requests merging.
+12. Call `finish` with completed/failed/stopped to persist final session status and remove disposable worktrees.
+13. Report execution target, audit branch, delivery branch if created, session ID, final implementation commit, iterations, validation results, and remaining concerns.
 
 ## Local execution
 
