@@ -449,9 +449,57 @@ Use three distinct scopes:
 The agent should actively review these after meaningful development/debugging work, but only persist durable, verified information. One-off task details, secrets, temporary logs, machine-specific paths, and unverified guesses should not be promoted.
 
 
+## ChatGPT Web message transports
+
+Each project can select one of three browser transports:
+
+```toml
+[browser]
+transport = "manual" # manual | native | cdp
+```
+
+- **manual**: chatgpt-worker prepares the exact wake-up message but does not operate ChatGPT Web. The user pastes/sends it.
+- **native**: CDP reloads the existing ChatGPT tab and inserts the text, but does not submit it. UI.Vision then attaches to the already-open ChatGPT tab and uses `XClick` on the enabled Send button.
+- **cdp**: the existing `send_message.js` handles reload, text insertion, Send, and DOM delivery verification.
+
+All three modes still use Git as the authoritative completion channel. The `native` mode is still automation; it is provided as an alternate interaction mechanism, not as a claim of human-equivalent or undetectable input.
+
+### Native UI.Vision prerequisite
+
+The native mode uses the macro:
+
+```text
+ChatGPTClickSendExistingTab
+```
+
+stored in:
+
+```text
+xwzliang/my_uivision/chatgpt/chatgpt_click_send_existing_tab.json
+```
+
+Install/update that repository's macros before using native mode. The macro selects an existing tab with title `ChatGPT*`, waits for an enabled send button, and performs an `XClick`; it does not navigate or insert text.
+
+Configure the autorun HTML if it is not auto-detected:
+
+```toml
+[browser]
+transport = "native"
+uivision_autorun_html = "/Users/you/uivision/ui.vision.html"
+uivision_macro_name = "ChatGPTClickSendExistingTab"
+```
+
+The normal send command remains transport-independent:
+
+```bash
+python3 scripts/lifecycle.py message --state-file <state-file> --send
+```
+
+For native mode, this calls `send_message.js --prepare-only` and then launches the UI.Vision macro.
+
 ## Fully automated ChatGPT Web handoff
 
-Antigravity should not ask you to copy a wake-up message into ChatGPT Web or later reply with `check response`. Everything is self-contained and automated via the Chrome DevTools Protocol (CDP).
+For automated modes, Antigravity should not ask you to copy a wake-up message into ChatGPT Web or later reply with `check response`.
 
 For each worker request the automated flow is:
 
