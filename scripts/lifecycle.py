@@ -11,6 +11,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import time
 from typing import Any
 
 import discover
@@ -208,6 +209,14 @@ def response(args):
     if p.returncode not in {0, 2, 3}:
         raise RuntimeError((p.stderr or "").strip() or "response check failed")
     data = json.loads(p.stdout)
+    branch_head = git(control, "rev-parse", f"origin/{state['task_branch']}").stdout.strip()
+    request_commit = state.get("request_commit")
+    if request_commit:
+        if git(control, "merge-base", "--is-ancestor", request_commit, branch_head, check=False).returncode != 0:
+            raise RuntimeError(f"request commit is not an ancestor of origin/{state['task_branch']}")
+        if branch_head == request_commit and not data.get("ready"):
+            print(json.dumps({"ok": True, "ready": False, "reason": "branch_has_not_advanced", "request_commit": request_commit}, indent=2))
+            return
     if not data.get("ready"):
         print(json.dumps(data, indent=2))
         return
@@ -228,6 +237,72 @@ def response(args):
         commits.append(impl)
     save_state(state_path, state)
     print(json.dumps({"ok": True, "ready": True, "implementation_commit": impl, "response": resp}, indent=2))
+
+def wait_response(args):
+    state_path = pathlib.Path(args.state_file).expanduser()
+    deadline = time.monotonic() + args.timeout
+    while True:
+        state = load_state(state_path)
+        control = pathlib.Path(state["control_worktree"])
+        sync_control(state)
+        p = protocol_cmd(
+            control,
+            "check-response",
+            "--session-id", state["session_id"],
+            "--request-id", state["current_request"],
+            "--json",
+            check=False,
+        )
+        if p.returncode not in {0, 2, 3}:
+            raise RuntimeError((p.stderr or "").strip() or "response check failed")
+        data = json.loads(p.stdout)
+        branch_head = git(control, "rev-parse", f"origin/{state['task_branch']}").stdout.strip()
+        request_commit = state.get("request_commit")
+
+        advanced = bool(request_commit and branch_head != request_commit)
+        if request_commit and git(control, "merge-base", "--is-ancestor", request_commit, branch_head, check=False).returncode != 0:
+            raise RuntimeError(f"request commit is not an ancestor of origin/{state['task_branch']}")
+
+        if data.get("ready"):
+            if not advanced:
+                raise RuntimeError("response file is present but task branch has not advanced beyond the request commit")
+            if not data.get("ok"):
+                raise RuntimeError("response file exists but failed protocol validation: " + "; ".join(data.get("errors", [])))
+            resp = data["response"]
+            if resp.get("status") != "completed":
+                print(json.dumps({"ok": True, "ready": True, "response": resp, "branch_head": branch_head}, indent=2))
+                return
+            impl = resp["implementation_commit"]
+            if git(control, "cat-file", "-e", f"{impl}^{{commit}}", check=False).returncode != 0:
+                raise RuntimeError(f"implementation commit not found after fetch: {impl}")
+            if git(control, "merge-base", "--is-ancestor", impl, f"origin/{state['task_branch']}", check=False).returncode != 0:
+                raise RuntimeError(f"implementation commit is not reachable from origin/{state['task_branch']}: {impl}")
+            state["last_implementation_commit"] = impl
+            commits = state.setdefault("implementation_commits", [])
+            if impl not in commits:
+                commits.append(impl)
+            save_state(state_path, state)
+            print(json.dumps({
+                "ok": True,
+                "ready": True,
+                "finished": True,
+                "implementation_commit": impl,
+                "finish_message": resp.get("finish_message"),
+                "branch_head": branch_head,
+                "response": resp,
+            }, indent=2))
+            return
+
+        if time.monotonic() >= deadline:
+            print(json.dumps({
+                "ok": True,
+                "ready": False,
+                "timed_out": True,
+                "request_commit": request_commit,
+                "branch_head": branch_head,
+            }, indent=2))
+            return
+        time.sleep(args.interval)
 
 def local_validation_worktree(state: dict[str, Any], impl: str) -> pathlib.Path:
     source = pathlib.Path(state["project_root"])
@@ -468,6 +543,12 @@ def main():
     r=sub.add_parser("response")
     r.add_argument("--state-file",required=True)
     r.set_defaults(func=response)
+
+    wr=sub.add_parser("wait-response")
+    wr.add_argument("--state-file",required=True)
+    wr.add_argument("--interval",type=float,default=10.0)
+    wr.add_argument("--timeout",type=float,default=1800.0)
+    wr.set_defaults(func=wait_response)
 
     pv=sub.add_parser("prepare-validation")
     pv.add_argument("--state-file",required=True)
