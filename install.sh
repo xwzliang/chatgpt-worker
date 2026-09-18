@@ -92,31 +92,40 @@ relaunch_antigravity_macos() {
     return 0
   fi
 
-  if [[ ! -d "/Applications/Antigravity IDE.app" ]]; then
-    echo "Antigravity IDE.app was not found in /Applications; skipping relaunch."
+  local app_path=""
+  local app_name=""
+
+  if [[ -d "/Applications/Antigravity.app" ]]; then
+    app_path="/Applications/Antigravity.app"
+    app_name="Antigravity"
+  elif [[ -d "/Applications/Antigravity IDE.app" ]]; then
+    app_path="/Applications/Antigravity IDE.app"
+    app_name="Antigravity IDE"
+  else
+    echo "Neither Antigravity.app nor Antigravity IDE.app was found in /Applications; skipping relaunch."
     return 0
   fi
 
   echo
-  echo "Relaunching Antigravity IDE..."
+  echo "Relaunching $app_name..."
 
-  # Ask the app to quit cleanly first so open windows/state can be saved.
-  osascript -e 'tell application "Antigravity IDE" to quit' >/dev/null 2>&1 || true
+  # Ask the installed app to quit cleanly first so open windows/state can be saved.
+  osascript -e "tell application \"$app_name\" to quit" >/dev/null 2>&1 || true
 
   # Wait briefly for the Electron process tree to exit.
   for _ in {1..40}; do
-    if ! pgrep -f '/Applications/Antigravity IDE.app/Contents/' >/dev/null 2>&1; then
+    if ! pgrep -f "$app_path/Contents/" >/dev/null 2>&1; then
       break
     fi
     sleep 0.25
   done
 
   # Match cockpit-tools' macOS launch behavior: start a fresh LaunchServices instance.
-  if open -n -a "Antigravity IDE"; then
-    echo "Antigravity IDE relaunched."
+  if open -n -a "$app_name"; then
+    echo "$app_name relaunched."
   else
-    echo "Plugin installed, but Antigravity IDE could not be relaunched automatically." >&2
-    echo "Please launch Antigravity IDE manually." >&2
+    echo "Plugin installed, but $app_name could not be relaunched automatically." >&2
+    echo "Please launch $app_name manually." >&2
   fi
 }
 
