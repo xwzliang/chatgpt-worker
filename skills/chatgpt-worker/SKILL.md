@@ -9,6 +9,26 @@ Use Antigravity as the orchestrator and reviewer. Use ChatGPT Web as the coding 
 
 The currently opened Antigravity project folder is the source of project identity.
 
+## One-time workspace activation
+
+The user should not need to type `/chatgpt-worker` before every later message in the same project.
+
+On the first explicit use of chatgpt-worker in a repository, bootstrap persistent workspace behavior:
+
+    "$PLUGIN_ROOT/scripts/workspace_bootstrap.py" enable --project "$PWD"
+
+This creates:
+
+- `.agents/rules/chatgpt-worker.md`: tells Antigravity to use chatgpt-worker automatically for substantive repository-changing coding/debugging tasks unless the user explicitly opts out;
+- `.agents/rules/project-lessons.md`: durable repository-specific lessons;
+- `~/.gemini/config/skills/chatgpt-worker-learnings/SKILL.md`: curated cross-project reusable engineering lessons.
+
+Do not overwrite user-edited files automatically. The bootstrap helper creates missing files and preserves existing ones unless explicitly forced.
+
+In Antigravity IDE, if a workspace rule activation selector is available, prefer setting the chatgpt-worker workspace rule to **Always On**. The rule file itself remains the portable source of the instruction.
+
+Once bootstrapped, later messages should automatically use chatgpt-worker when they are substantive coding/debugging/repository-change requests. Respect explicit opt-out requests such as "don't use chatgpt-worker" or "do this directly."
+
 ## First-run configuration
 
 If the opened repository does not contain `.chatgpt-worker.toml`, do not fail immediately. Run:
@@ -279,6 +299,51 @@ If a validation command or remote job reports an artifact under a mapped remote 
 5. if the local mount is unavailable, fall back to remote inspection or an explicit transfer rather than assuming the mapping is mounted.
 
 The helper scripts/path_translate.py can translate an individual remote path using the project config.
+
+## Active learning maintenance
+
+After meaningful implementation, debugging, testing, or review work, actively consider whether a durable lesson was learned.
+
+Classify lessons before persisting them:
+
+### Repository-specific durable lessons
+
+Write to:
+
+    .agents/rules/project-lessons.md
+
+Use this for verified knowledge that will likely help future work in the current repository but is not broadly portable, such as:
+
+- architecture invariants;
+- required setup/test commands;
+- repository-specific build traps;
+- local conventions that prevent regressions.
+
+### Cross-project reusable lessons
+
+Write to:
+
+    ~/.gemini/config/skills/chatgpt-worker-learnings/SKILL.md
+
+Use this only for verified techniques, traps, or practices that can reasonably help future work in other repositories.
+
+A cross-project lesson should be concise and actionable, ideally recording:
+
+- When: recognizable context/symptom;
+- Lesson: reusable rule;
+- Why: concise evidence/reason;
+- Action: what to do next time.
+
+Do not promote:
+
+- one-off task details;
+- temporary debugging state;
+- secrets, credentials, personal data;
+- repository-specific names/paths/IDs;
+- unverified guesses;
+- information already clearly documented elsewhere unless the lesson is about how to find/use it.
+
+Prefer quality over volume. Maintaining these files means pruning or refining obsolete/duplicated lessons when appropriate, not only appending forever.
 
 ## Feedback format
 
