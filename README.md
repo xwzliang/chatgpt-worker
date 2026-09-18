@@ -232,3 +232,45 @@ platforms/
 ```
 
 See `ARCHITECTURE.md` for the extension contract. Future adapters should reuse the same `.chatgpt-worker.toml`, Git-origin discovery, path mappings, validation rules, and worker-loop semantics rather than creating parallel implementations.
+
+
+## Git-backed communication on task branches
+
+The orchestrator and ChatGPT Web now communicate primarily through Git, not by parsing browser replies.
+
+Runtime communication lives only on a dedicated task branch:
+
+```text
+.chatgpt-worker/
+├── PROTOCOL.md
+└── sessions/
+    └── <session-id>/
+        ├── session.json
+        ├── requests/
+        │   ├── 0001.md
+        │   └── ...
+        └── responses/
+            ├── 0001.json
+            └── ...
+```
+
+The default branch should stay clean. With:
+
+```toml
+[communication]
+runtime_dir = ".chatgpt-worker"
+retain_on_merge = false
+```
+
+the task branch keeps the full audit trail, while communication files are omitted/removed from the merge result.
+
+Browser messages are intentionally minimal: repository, branch, session, and request ID. The actual task or validation feedback lives in the request file.
+
+A completed request uses two commits:
+
+1. an implementation commit containing the code change;
+2. a response commit containing `responses/NNNN.json`, which records the `implementation_commit` SHA.
+
+The host fetches the task branch, reads the response JSON, validates the implementation commit, and then runs tests/review.
+
+The canonical protocol is in `protocol/PROTOCOL.md`; `scripts/protocol.py` provides helpers for session creation, request creation, response checks, and session state updates.
