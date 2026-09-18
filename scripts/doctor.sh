@@ -23,6 +23,8 @@ if d["execution"] == "remote":
     print("Repo roots:       " + ", ".join(d["repo_roots"]))
     if d.get("target_repo"):
         print(f"Remote repo:      {d['target_repo']}")
+        if d.get("target_repo_local_mount"):
+            print(f"Local mount:      {d['target_repo_local_mount']}")
         print("Origin match:     ✓")
     else:
         print("Remote repo:      NOT FOUND")
@@ -31,6 +33,11 @@ else:
     print(f"Local repo:       {d['target_repo']}")
     print("Origin match:     ✓")
 
+maps=d.get("path_mappings", [])
+if maps:
+    print("Path mappings:")
+    for item in maps:
+        print(f"  {item['remote']} -> {item['local']}")
 print(f"Branch prefix:    {d['branch_prefix']}")
 print(f"Max iterations:   {d['max_iterations']}")
 cmds=d.get("validation_commands", [])
