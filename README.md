@@ -102,3 +102,81 @@ The skill directs Antigravity to open/reuse a ChatGPT Web conversation, delegate
 ## Safety
 
 ChatGPT Web is treated as a coding worker, not as the final authority. The plugin does not authorize automatic merging by default and instructs Antigravity not to expose secrets or perform destructive/privileged Linux operations without explicit user authorization.
+
+
+## Per-project configuration
+
+The opened Antigravity project folder is the source of project identity. Add a repository-root file named `.chatgpt-worker.toml` to choose where validation runs.
+
+### Local project
+
+```toml
+execution = "local"
+
+branch_prefix = "chatgpt-worker/"
+max_iterations = 5
+
+[validation]
+commands = [
+  "npm run typecheck",
+  "npm test",
+  "npm run build",
+]
+```
+
+In local mode, ChatGPT still edits the connected GitHub repository, while Antigravity validates the fetched task branch on the Mac. The skill prefers a disposable worktree so the opened working tree is not disturbed.
+
+### Remote project
+
+```toml
+execution = "remote"
+
+branch_prefix = "chatgpt-worker/"
+max_iterations = 5
+
+[remote]
+host = "ai-server"
+repo_roots = [
+  "/mnt/omv/git",
+  "/home/broliang/git",
+]
+
+[validation]
+commands = [
+  "pytest -q",
+  "ruff check .",
+]
+```
+
+The SSH alias itself should be configured in `~/.ssh/config`. In remote mode, the plugin:
+
+1. Reads the opened local repository's Git `origin`.
+2. Normalizes it to a repository identity such as `xwzliang/project`.
+3. Connects to the configured SSH host.
+4. Searches only the configured `repo_roots`.
+5. Selects a remote repository only when its normalized Git `origin` matches the local repository.
+
+Directory names are only used as a fast candidate guess; Git-origin equality is the actual identity check.
+
+Examples are included at:
+
+```text
+examples/project-config-local.toml
+examples/project-config-remote.toml
+```
+
+## Discovery check
+
+After adding `.chatgpt-worker.toml`, verify the project before starting a coding loop:
+
+```bash
+~/.gemini/config/plugins/chatgpt-worker/scripts/doctor.sh
+```
+
+For machine-readable discovery:
+
+```bash
+~/.gemini/config/plugins/chatgpt-worker/scripts/discover.py --json
+```
+
+A ready remote project reports the opened repo, normalized Git origin, SSH host, matched remote repo, validation commands, and `Status: READY`.
