@@ -17,6 +17,9 @@ Before starting worker execution:
 - use the opened workspace/repository as project scope;
 - ensure .chatgpt-worker.toml exists, running guided first-run configuration if needed;
 - use the Git-backed task-branch communication protocol;
+- use Antigravity's browser capability to send ChatGPT Web wake-up messages yourself;
+- never ask the user to relay routine messages to ChatGPT Web or to say "check response";
+- poll Git for a committed finished response instead of relying on browser prose;
 - keep the opened user workspace untouched by worker task branches/worktrees;
 - validate the exact implementation commit using the configured local or remote execution environment.
 
