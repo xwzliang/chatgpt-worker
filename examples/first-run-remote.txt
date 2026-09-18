@@ -1,0 +1,15 @@
+First-run choices:
+
+execution = remote
+host = choose one concrete Host alias from ~/.ssh/config
+repo_roots = one or more directories to search for the matching Git origin
+
+Optional:
+path mappings such as /mnt/omv=/Volumes/omv
+validation commands
+
+Recommended defaults:
+branch_prefix = chatgpt-worker/
+max_iterations = 5
+communication.runtime_dir = .chatgpt-worker
+communication.retain_on_merge = false
