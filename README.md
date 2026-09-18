@@ -355,3 +355,49 @@ chatgpt-worker/fix-auth-delivery
 ```
 
 Use the delivery branch for a PR or merge. This enforces the task-branch-only communication model while retaining the audit branch for history.
+
+
+## First-run project setup
+
+If an opened project has no `.chatgpt-worker.toml`, Antigravity should guide configuration instead of stopping.
+
+It first inspects the project and SSH configuration:
+
+```bash
+~/.gemini/config/plugins/chatgpt-worker/scripts/configure.py inspect --project .
+```
+
+This reports the Git project root, whether a config already exists, and concrete host aliases parsed from `~/.ssh/config`.
+
+Antigravity then asks whether the project should execute locally or remotely.
+
+For **local** execution, it writes the config directly after confirming/inferring validation commands:
+
+```bash
+scripts/configure.py write \
+  --project . \
+  --execution local \
+  --validation-command "npm test"
+```
+
+For **remote** execution, Antigravity presents the detected SSH aliases, asks which one to use, asks for one or more remote repo roots, and optionally records path mappings such as:
+
+```text
+/mnt/omv=/Volumes/omv
+```
+
+Example:
+
+```bash
+scripts/configure.py write \
+  --project . \
+  --execution remote \
+  --host ai-server \
+  --repo-root /mnt/omv/git \
+  --path-mapping /mnt/omv=/Volumes/omv \
+  --validation-command "pytest -q"
+```
+
+It then reruns `doctor.sh`. Once the project reports `Status: READY`, the normal task lifecycle can begin.
+
+Existing config files are not overwritten unless `--force` is explicitly used.
