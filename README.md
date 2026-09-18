@@ -447,3 +447,73 @@ Use three distinct scopes:
    - verified, portable engineering techniques and traps useful in other projects.
 
 The agent should actively review these after meaningful development/debugging work, but only persist durable, verified information. One-off task details, secrets, temporary logs, machine-specific paths, and unverified guesses should not be promoted.
+
+
+## Fully automated ChatGPT Web handoff
+
+Antigravity should not ask you to copy a wake-up message into ChatGPT Web or later reply with `check response`.
+
+For each worker request it should:
+
+```text
+create/push request commit
+        ↓
+Antigravity browser opens/focuses ChatGPT Web
+        ↓
+Antigravity sends compact wake-up message itself
+        ↓
+ChatGPT Web reads request from GitHub
+        ↓
+implementation commit
+        ↓
+response commit with finished=true
+        ↓
+Antigravity polls Git automatically
+        ↓
+validate exact implementation commit
+```
+
+The Git watcher is:
+
+```bash
+scripts/lifecycle.py wait-response \
+  --state-file <state-file>
+```
+
+Defaults:
+
+- poll interval: 10 seconds
+- timeout: 1800 seconds
+
+These can be overridden with `--interval` and `--timeout`.
+
+A request is considered finished only when all of the following are true:
+
+1. the remote task branch has advanced beyond the request commit;
+2. the matching committed response JSON exists;
+3. `status` is `completed`;
+4. `finished` is `true`;
+5. `finish_message` is non-empty;
+6. `implementation_commit` exists and is reachable from the task branch.
+
+Example response:
+
+```json
+{
+  "protocol_version": 1,
+  "request_id": "0001",
+  "status": "completed",
+  "finished": true,
+  "implementation_commit": "abc123def456",
+  "finish_message": "Implementation is complete and pushed.",
+  "summary": "Fixed the dashboard refresh bug.",
+  "files_changed": [
+    "src/pages/DashboardPage.tsx"
+  ],
+  "notes": []
+}
+```
+
+Browser prose such as "done" is never the authoritative completion signal.
+
+If the watcher times out, Antigravity should inspect the same ChatGPT Web conversation itself. User involvement is only needed for a genuine blocker such as authentication, permissions, or an ambiguous decision—not for routine message relay or polling.
