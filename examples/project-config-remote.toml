@@ -1,0 +1,17 @@
+execution = "remote"
+
+branch_prefix = "chatgpt-worker/"
+max_iterations = 5
+
+[remote]
+host = "ai-server"
+repo_roots = [
+  "/mnt/omv/git",
+  "/home/broliang/git",
+]
+
+[validation]
+commands = [
+  "pytest -q",
+  "ruff check .",
+]
