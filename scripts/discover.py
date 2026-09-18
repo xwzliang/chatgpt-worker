@@ -122,6 +122,19 @@ def communication_config(cfg: dict) -> dict:
         "retain_on_merge": retain_on_merge,
     }
 
+def browser_config(cfg: dict) -> dict:
+    browser = cfg.get("browser", {})
+    transport = str(browser.get("transport", "cdp")).strip().lower() or "cdp"
+    if transport not in {"manual", "native", "cdp"}:
+        raise ValueError('[browser].transport must be "manual", "native", or "cdp"')
+    html = browser.get("uivision_autorun_html")
+    macro = str(browser.get("uivision_macro_name", "ChatGPTClickSendExistingTab")).strip() or "ChatGPTClickSendExistingTab"
+    return {
+        "transport": transport,
+        "uivision_autorun_html": str(html).strip() if html is not None and str(html).strip() else None,
+        "uivision_macro_name": macro,
+    }
+
 def validation_commands(cfg: dict) -> list[str]:
     v = cfg.get("validation", {})
     commands = v.get("commands", [])
@@ -151,6 +164,7 @@ def discover(start: str) -> dict:
         "branch_prefix": str(cfg.get("branch_prefix", "chatgpt-worker/")),
         "validation_commands": validation_commands(cfg),
         "communication": communication_config(cfg),
+        "browser": browser_config(cfg),
         "path_mappings": path_mappings(cfg) if execution == "remote" else [],
     }
 
