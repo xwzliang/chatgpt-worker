@@ -401,3 +401,49 @@ scripts/configure.py write \
 It then reruns `doctor.sh`. Once the project reports `Status: READY`, the normal task lifecycle can begin.
 
 Existing config files are not overwritten unless `--force` is explicitly used.
+
+
+## One-time activation per project
+
+You do **not** need to type `/chatgpt-worker` before every message.
+
+On the first explicit use in a repository, bootstrap persistent workspace behavior:
+
+```bash
+~/.gemini/config/plugins/chatgpt-worker/scripts/workspace_bootstrap.py enable --project .
+```
+
+This creates:
+
+```text
+.agents/
+└── rules/
+    ├── chatgpt-worker.md
+    └── project-lessons.md
+
+~/.gemini/config/skills/
+└── chatgpt-worker-learnings/
+    └── SKILL.md
+```
+
+The workspace rule tells Antigravity to use chatgpt-worker automatically for substantive coding/debugging/repository-changing work unless you explicitly opt out for a task.
+
+In Antigravity IDE, if the workspace-rule UI exposes activation modes, set `chatgpt-worker.md` to **Always On** for the strongest persistence.
+
+### Learning scopes
+
+Use three distinct scopes:
+
+1. **Workspace auto-use rule**
+   - `.agents/rules/chatgpt-worker.md`
+   - controls whether chatgpt-worker should be used automatically in this repository.
+
+2. **Repository-specific durable lessons**
+   - `.agents/rules/project-lessons.md`
+   - architecture invariants, setup requirements, recurring repository-specific traps and conventions.
+
+3. **Cross-project reusable lessons**
+   - `~/.gemini/config/skills/chatgpt-worker-learnings/SKILL.md`
+   - verified, portable engineering techniques and traps useful in other projects.
+
+The agent should actively review these after meaningful development/debugging work, but only persist durable, verified information. One-off task details, secrets, temporary logs, machine-specific paths, and unverified guesses should not be promoted.
