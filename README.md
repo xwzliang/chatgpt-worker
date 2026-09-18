@@ -1,6 +1,6 @@
 # chatgpt-worker
 
-An Antigravity plugin that uses **Antigravity as the orchestrator/reviewer** and **ChatGPT Web as a coding worker**.
+A host-extensible coding-worker framework that uses **ChatGPT Web as a coding worker** and a local host agent as the orchestrator/reviewer. **Antigravity is the currently implemented host adapter**; Codex and Claude are reserved for future adapters but are not implemented yet.
 
 The intended loop is:
 
@@ -141,6 +141,10 @@ repo_roots = [
   "/home/broliang/git",
 ]
 
+[[remote.path_mappings]]
+remote = "/mnt/omv"
+local = "/Volumes/omv"
+
 [validation]
 commands = [
   "pytest -q",
@@ -180,3 +184,51 @@ For machine-readable discovery:
 ```
 
 A ready remote project reports the opened repo, normalized Git origin, SSH host, matched remote repo, validation commands, and `Status: READY`.
+
+
+## Remote-to-local mounted paths
+
+A remote project can declare that a Linux path and a macOS path refer to the same mounted storage:
+
+```toml
+[[remote.path_mappings]]
+remote = "/mnt/omv"
+local = "/Volumes/omv"
+```
+
+With this mapping, a Linux-generated artifact such as:
+
+```text
+/mnt/omv/resources/output/result.mp4
+```
+
+can be inspected directly on the Mac at:
+
+```text
+/Volumes/omv/resources/output/result.mp4
+```
+
+The plugin should prefer that direct local inspection when the mapped mount exists instead of copying the artifact back over SSH.
+
+You can translate a path manually with:
+
+```bash
+~/.gemini/config/plugins/chatgpt-worker/scripts/path_translate.py \
+  /mnt/omv/resources/output/result.mp4 \
+  --config .chatgpt-worker.toml
+```
+
+## Extensible host architecture
+
+Shared logic lives in `scripts/` and project configuration remains platform-independent.
+
+Host-specific adapters live under:
+
+```text
+platforms/
+├── antigravity/   # implemented
+├── codex/         # placeholder only
+└── claude/        # placeholder only
+```
+
+See `ARCHITECTURE.md` for the extension contract. Future adapters should reuse the same `.chatgpt-worker.toml`, Git-origin discovery, path mappings, validation rules, and worker-loop semantics rather than creating parallel implementations.
