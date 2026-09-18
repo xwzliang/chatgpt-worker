@@ -10,6 +10,10 @@ repo_roots = [
   "/home/broliang/git",
 ]
 
+[[remote.path_mappings]]
+remote = "/mnt/omv"
+local = "/Volumes/omv"
+
 [validation]
 commands = [
   "pytest -q",
