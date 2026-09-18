@@ -6,6 +6,8 @@ import datetime as dt
 import json
 import pathlib
 import re
+import shutil
+import subprocess
 import sys
 
 PROTOCOL_VERSION = 1
@@ -24,6 +26,15 @@ def slugify(value: str) -> str:
     value = re.sub(r"[^A-Za-z0-9._-]+", "-", value.strip()).strip("-")
     return value or "task"
 
+def current_branch(repo: pathlib.Path) -> str:
+    p = subprocess.run(["git", "branch", "--show-current"], cwd=repo, text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    if p.returncode != 0:
+        raise RuntimeError(p.stderr.strip() or "unable to determine current branch")
+    branch = p.stdout.strip()
+    if not branch:
+        raise RuntimeError("detached HEAD is not supported for communication runtime")
+    return branch
+
 def protocol_root(repo: pathlib.Path):
     return repo / ".chatgpt-worker"
 
@@ -32,6 +43,19 @@ def session_dir(repo: pathlib.Path, session_id: str):
 
 def init_session(args):
     repo = pathlib.Path(args.repo).resolve()
+    branch = current_branch(repo)
+    if branch in {"main", "master"}:
+        raise RuntimeError("refusing to create chatgpt-worker communication runtime on the default branch")
+    if branch != args.branch:
+        raise RuntimeError(f"current branch {branch!r} does not match --branch {args.branch!r}")
+
+    runtime = protocol_root(repo)
+    runtime.mkdir(parents=True, exist_ok=True)
+    canonical = pathlib.Path(__file__).resolve().parent.parent / "protocol" / "PROTOCOL.md"
+    if not canonical.is_file():
+        raise RuntimeError(f"canonical protocol not found: {canonical}")
+    shutil.copyfile(canonical, runtime / "PROTOCOL.md")
+
     sid = args.session_id or f"{dt.datetime.now().strftime('%Y%m%d-%H%M%S')}-{slugify(args.task)}"
     sdir = session_dir(repo, sid)
     if sdir.exists():
