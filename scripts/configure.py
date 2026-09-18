@@ -127,6 +127,10 @@ def cmd_inspect(args):
     root=git_root(args.project)
     config=root/CONFIG_NAME
     ssh_path=pathlib.Path(args.ssh_config).expanduser()
+    uivision_candidates=[
+        pathlib.Path("~/uivision/ui.vision.html").expanduser(),
+        pathlib.Path("~/Desktop/uivision/ui.vision.html").expanduser(),
+    ]
     data={
         "ok":True,
         "project_root":str(root),
@@ -134,6 +138,13 @@ def cmd_inspect(args):
         "config_exists":config.exists(),
         "ssh_config":str(ssh_path),
         "ssh_aliases":ssh_aliases(ssh_path),
+        "uivision_autorun_html_candidates":[str(p) for p in uivision_candidates if p.is_file()],
+        "uivision_macro_candidates":[
+            str(p) for p in [
+                pathlib.Path("~/uivision/macros/ChatGPTClickSendExistingTab.json").expanduser(),
+                pathlib.Path("~/Desktop/uivision/macros/ChatGPTClickSendExistingTab.json").expanduser(),
+            ] if p.is_file()
+        ],
     }
     print(json.dumps(data,indent=2))
 
@@ -147,7 +158,7 @@ def cmd_write(args):
     else:
         content=render_remote(args)
     config.write_text(content,encoding="utf-8")
-    print(json.dumps({"ok":True,"config_path":str(config),"execution":args.execution},indent=2))
+    print(json.dumps({"ok":True,"config_path":str(config),"execution":args.execution,"browser_transport":args.browser_transport},indent=2))
 
 def main():
     p=argparse.ArgumentParser(description="First-run configuration helper for chatgpt-worker")
