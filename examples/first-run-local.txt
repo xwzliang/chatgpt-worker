@@ -1,0 +1,10 @@
+First-run choices:
+
+execution = local
+
+Optional validation commands can be added immediately or later.
+Recommended defaults:
+branch_prefix = chatgpt-worker/
+max_iterations = 5
+communication.runtime_dir = .chatgpt-worker
+communication.retain_on_merge = false
