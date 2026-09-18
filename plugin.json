@@ -1,0 +1,4 @@
+{
+  "name": "chatgpt-worker",
+  "description": "Antigravity plugin that delegates coding work to ChatGPT Web, validates changes on a remote Linux development environment, and iterates on test/review feedback."
+}
