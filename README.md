@@ -274,3 +274,84 @@ A completed request uses two commits:
 The host fetches the task branch, reads the response JSON, validates the implementation commit, and then runs tests/review.
 
 The canonical protocol is in `protocol/PROTOCOL.md`; `scripts/protocol.py` provides helpers for session creation, request creation, response checks, and session state updates.
+
+
+## Automatic task-branch/worktree lifecycle
+
+The plugin now provides `scripts/lifecycle.py`, which keeps the Antigravity-opened repository untouched while managing task branches and disposable worktrees automatically.
+
+The normal flow is:
+
+```text
+opened project
+    │
+    ├─ remains on user's current branch
+    │
+    └─ lifecycle creates:
+         ├─ control worktree → audit/task branch
+         └─ validation worktree → exact implementation commit
+```
+
+For remote projects, the validation worktree is created on the configured Linux host beside the discovered remote repository.
+
+Core commands:
+
+```bash
+# 1. Create task branch, control worktree, session, request 0001, commit and push
+scripts/lifecycle.py start \
+  --project . \
+  --task "Fix authentication handling" \
+  --request-file /tmp/request.md
+
+# 2. Query current lifecycle state
+scripts/lifecycle.py status --state-file <state-file>
+
+# 3. Fetch the audit branch and check whether ChatGPT wrote its response
+scripts/lifecycle.py response --state-file <state-file>
+
+# 4. Create/update validation worktree at the exact implementation commit
+scripts/lifecycle.py prepare-validation --state-file <state-file>
+
+# 5. Run configured validation commands
+scripts/lifecycle.py validate --state-file <state-file>
+
+# 6. Append the next feedback request if needed
+scripts/lifecycle.py next-request \
+  --state-file <state-file> \
+  --type validation_failure \
+  --request-file /tmp/feedback.md
+
+# 7. Build a clean branch containing only implementation commits
+scripts/lifecycle.py prepare-delivery --state-file <state-file>
+
+# 8. Persist final session state and clean disposable worktrees
+scripts/lifecycle.py finish --state-file <state-file> --status completed
+```
+
+Lifecycle state is stored outside the repository under:
+
+```text
+~/.cache/chatgpt-worker/tasks/
+```
+
+The task/audit branch is preserved after cleanup.
+
+### Audit branch vs delivery branch
+
+The audit branch contains both code and the complete Git communication history:
+
+```text
+chatgpt-worker/fix-auth
+├── source changes
+└── .chatgpt-worker/
+    └── requests / responses / session state
+```
+
+The delivery branch is reconstructed from the original base branch by cherry-picking only implementation commits:
+
+```text
+chatgpt-worker/fix-auth-delivery
+└── source changes only
+```
+
+Use the delivery branch for a PR or merge. This enforces the task-branch-only communication model while retaining the audit branch for history.
