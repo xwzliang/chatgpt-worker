@@ -47,6 +47,15 @@ def render_local(args) -> str:
         f'branch_prefix = {toml_quote(args.branch_prefix)}',
         f'max_iterations = {args.max_iterations}',
         '',
+        '[browser]',
+        f'transport = {toml_quote(args.browser_transport)}',
+    ]
+    if args.uivision_autorun_html:
+        lines.append(f'uivision_autorun_html = {toml_quote(args.uivision_autorun_html)}')
+    if args.browser_transport == "native":
+        lines.append(f'uivision_macro_name = {toml_quote(args.uivision_macro_name)}')
+    lines += [
+        '',
         '[validation]',
         'commands = [',
     ]
@@ -72,6 +81,15 @@ def render_remote(args) -> str:
         '',
         f'branch_prefix = {toml_quote(args.branch_prefix)}',
         f'max_iterations = {args.max_iterations}',
+        '',
+        '[browser]',
+        f'transport = {toml_quote(args.browser_transport)}',
+    ]
+    if args.uivision_autorun_html:
+        lines.append(f'uivision_autorun_html = {toml_quote(args.uivision_autorun_html)}')
+    if args.browser_transport == "native":
+        lines.append(f'uivision_macro_name = {toml_quote(args.uivision_macro_name)}')
+    lines += [
         '',
         '[remote]',
         f'host = {toml_quote(args.host)}',
@@ -149,6 +167,9 @@ def main():
     w.add_argument("--validation-command",action="append",default=[])
     w.add_argument("--branch-prefix",default="chatgpt-worker/")
     w.add_argument("--max-iterations",type=int,default=5)
+    w.add_argument("--browser-transport",choices=["manual","native","cdp"],default="cdp")
+    w.add_argument("--uivision-autorun-html")
+    w.add_argument("--uivision-macro-name",default="ChatGPTClickSendExistingTab")
     w.add_argument("--force",action="store_true")
     w.set_defaults(func=cmd_write)
 
