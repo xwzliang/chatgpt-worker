@@ -1,0 +1,11 @@
+.chatgpt-worker/
+├── PROTOCOL.md
+└── sessions/
+    └── 20260918-fix-auth/
+        ├── session.json
+        ├── requests/
+        │   ├── 0001.md
+        │   └── 0002.md
+        └── responses/
+            ├── 0001.json
+            └── 0002.json
