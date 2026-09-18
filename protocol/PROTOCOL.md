@@ -99,7 +99,7 @@ ChatGPT Web must create the corresponding JSON response, for example:
   "protocol_version": 1,
   "request_id": "0001",
   "status": "completed",
-  "commit": "0123456789abcdef",
+  "implementation_commit": "0123456789abcdef",
   "summary": "Implemented the requested change.",
   "files_changed": [
     "src/example.py"
@@ -113,7 +113,7 @@ Required fields:
 - `protocol_version`: currently `1`
 - `request_id`: must match the request filename
 - `status`: `completed`, `blocked`, or `failed`
-- `commit`: commit SHA containing the implementation and response file when status is `completed`
+- `implementation_commit`: SHA of the code implementation commit when status is `completed`
 - `summary`: short description
 
 Optional:
@@ -136,7 +136,7 @@ Session: <session-id>
 Next request: <NNNN>
 
 Read .chatgpt-worker/PROTOCOL.md and the pending request file in the repository.
-Make the requested code changes, commit and push them, then write the corresponding response JSON file.
+Make the requested code changes and commit them first. Then write the corresponding response JSON containing that implementation commit SHA, commit the response file separately, and push both commits.
 ```
 
 The host must not treat prose in the browser UI as authoritative completion. Completion is recognized from the Git response file after fetch/pull.
@@ -149,7 +149,7 @@ The host must not treat prose in the browser UI as authoritative completion. Com
 4. Wake ChatGPT Web with the compact control message.
 5. Fetch the branch until the corresponding response file appears.
 6. Parse and validate the response JSON.
-7. Verify/fetch the declared commit.
+7. Verify/fetch the declared implementation_commit.
 8. Run configured validation/review.
 9. On failure, append the next request and repeat.
 10. On success, mark session completed.
@@ -161,3 +161,13 @@ The host must not treat prose in the browser UI as authoritative completion. Com
 - Do not trust a response commit SHA without fetching/verifying it.
 - Do not merge automatically unless explicitly authorized.
 - Do not overwrite prior request/response history.
+
+
+## Two-commit completion rule
+
+For a completed request, ChatGPT Web should make two commits in order:
+
+1. **Implementation commit** — contains the requested source/test changes.
+2. **Response commit** — adds `responses/NNNN.json` and records the implementation commit SHA in `implementation_commit`.
+
+This avoids the impossible self-reference of trying to place a commit's own SHA inside a file contained by that same commit.
