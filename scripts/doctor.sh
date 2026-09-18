@@ -38,6 +38,10 @@ if maps:
     print("Path mappings:")
     for item in maps:
         print(f"  {item['remote']} -> {item['local']}")
+comm=d.get("communication", {})
+if comm:
+    print(f"Runtime dir:      {comm.get('runtime_dir', '.chatgpt-worker')}")
+    print(f"Retain on merge:  {comm.get('retain_on_merge', False)}")
 print(f"Branch prefix:    {d['branch_prefix']}")
 print(f"Max iterations:   {d['max_iterations']}")
 cmds=d.get("validation_commands", [])
