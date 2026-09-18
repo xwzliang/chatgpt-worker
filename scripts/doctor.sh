@@ -53,66 +53,70 @@ else:
     print("  (none configured)")
 
 print()
-print("Browser Automation (ChatGPT Web Messenger):")
+print("Browser transport:")
+import shutil, subprocess, os, pathlib, platform
+browser=d.get("browser", {})
+transport=browser.get("transport", "cdp")
+print(f"  Mode:           {transport}")
 
-# 1. Check Node.js
-import shutil, subprocess, os, pathlib
-node_path = shutil.which("node")
-if node_path:
-    try:
-        ver = subprocess.check_output(["node", "-v"], text=True).strip()
-        print(f"  Node.js:        ✓ ({ver})")
-    except Exception:
-        print(f"  Node.js:        ✓ ({node_path})")
+if transport == "manual":
+    print("  Automation:     none (user sends the prepared wake-up message manually)")
 else:
-    print("  Node.js:        ✗ NOT FOUND (Required for send_message.js)")
-
-# 2. Check Chrome DevTools port
-devtools_found = False
-active_port_paths = [
-    os.environ.get("CHROME_DEVTOOLS_PORT_FILE"),
-    os.path.expanduser("~/Library/Application Support/Google/Chrome/DevToolsActivePort"),
-    os.path.expanduser("~/.config/google-chrome/DevToolsActivePort"),
-    os.path.expanduser("~/.config/chromium/DevToolsActivePort"),
-]
-for p in active_port_paths:
-    if p and os.path.exists(p):
+    node_path = shutil.which("node")
+    if node_path:
         try:
-            with open(p, "r", encoding="utf-8") as f:
-                port = f.readline().strip()
-                print(f"  Chrome DevTools:✓ Active (port {port})")
-                devtools_found = True
-                break
+            ver = subprocess.check_output(["node", "-v"], text=True).strip()
+            print(f"  Node.js:        ✓ ({ver})")
+        except Exception:
+            print(f"  Node.js:        ✓ ({node_path})")
+    else:
+        print("  Node.js:        ✗ NOT FOUND (required for prompt preparation/CDP)")
+
+    devtools_found = False
+    active_port_paths = [
+        os.environ.get("CHROME_DEVTOOLS_PORT_FILE"),
+        os.path.expanduser("~/Library/Application Support/Google/Chrome/DevToolsActivePort"),
+        os.path.expanduser("~/.config/google-chrome/DevToolsActivePort"),
+        os.path.expanduser("~/.config/chromium/DevToolsActivePort"),
+    ]
+    for p in active_port_paths:
+        if p and os.path.exists(p):
+            try:
+                with open(p, "r", encoding="utf-8") as f:
+                    port = f.readline().strip()
+                    print(f"  Chrome DevTools:✓ Active (port {port})")
+                    devtools_found = True
+                    break
+            except Exception:
+                pass
+    if not devtools_found:
+        print("  Chrome DevTools:! Not active")
+
+    if transport == "native":
+        html=browser.get("uivision_autorun_html")
+        candidates=[html] if html else []
+        candidates += [
+            os.path.expanduser("~/uivision/ui.vision.html"),
+            os.path.expanduser("~/Desktop/uivision/ui.vision.html"),
+        ]
+        found=next((p for p in candidates if p and os.path.isfile(os.path.expanduser(p))), None)
+        print(f"  UI.Vision HTML: {'✓ ' + found if found else '✗ NOT FOUND'}")
+        print(f"  UI.Vision macro:{browser.get('uivision_macro_name', 'ChatGPTClickSendExistingTab')}")
+    elif platform.system() == "Darwin":
+        script_dir = pathlib.Path(sys.argv[2])
+        auto_allow_bin = script_dir / "auto_allow"
+        is_running = False
+        try:
+            p = subprocess.run(["pgrep", "-f", "auto_allow"], stdout=subprocess.PIPE, text=True)
+            is_running = p.returncode == 0 and bool(p.stdout.strip())
         except Exception:
             pass
-
-if not devtools_found:
-    print("  Chrome DevTools:! Not active (launch Chrome with --remote-debugging-port=9222 or open chrome://inspect/#remote-debugging)")
-
-# 3. Check auto_allow on macOS
-import platform
-if platform.system() == "Darwin":
-    script_dir = pathlib.Path(sys.argv[2])
-    auto_allow_bin = script_dir / "auto_allow"
-    swiftc_path = shutil.which("swiftc")
-    
-    # Check if process is running
-    is_running = False
-    try:
-        p = subprocess.run(["pgrep", "-f", "auto_allow"], stdout=subprocess.PIPE, text=True)
-        if p.returncode == 0 and p.stdout.strip():
-            is_running = True
-    except Exception:
-        pass
-
-    if is_running:
-        print("  auto_allow:     ✓ RUNNING (Auto-approving Chrome debugging prompts)")
-    elif auto_allow_bin.exists() and os.access(auto_allow_bin, os.X_OK):
-        print(f"  auto_allow:     ✓ Built ({auto_allow_bin}) - start with scripts/auto_allow.sh start")
-    elif swiftc_path:
-        print("  auto_allow:     ✓ Ready to build with swiftc (scripts/auto_allow.sh compile)")
-    else:
-        print("  auto_allow:     ! Fallback to AppleScript available (scripts/auto-allow-chrome.sh)")
+        if is_running:
+            print("  auto_allow:     ✓ RUNNING")
+        elif auto_allow_bin.exists() and os.access(auto_allow_bin, os.X_OK):
+            print("  auto_allow:     ✓ Built (not running)")
+        else:
+            print("  auto_allow:     ! Not built/running")
 
 ready = bool(d.get("origin_verified")) and bool(d.get("target_repo"))
 print()
