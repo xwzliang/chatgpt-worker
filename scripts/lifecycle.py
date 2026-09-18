@@ -520,6 +520,48 @@ def status(args):
         result["validation_worktree_exists"] = None
     print(json.dumps({"ok": True, **result}, indent=2))
 
+def make_wakeup_message(state: dict[str, Any]) -> str:
+    return (
+        "Continue the chatgpt-worker task.\n\n"
+        f"Repository: {state['origin']}\n"
+        f"Branch: {state['task_branch']}\n"
+        f"Session: {state['session_id']}\n"
+        f"Next request: {state['current_request']}\n\n"
+        "Read .chatgpt-worker/PROTOCOL.md and the pending request file in the repository.\n"
+        "Make the requested code changes, commit and push them, then write the corresponding response JSON file.\n"
+    )
+
+def message(args):
+    state_path = pathlib.Path(args.state_file).expanduser()
+    state = load_state(state_path)
+    msg = make_wakeup_message(state)
+    if args.send:
+        send_script = SCRIPT_DIR / "send_message.js"
+        if not send_script.exists():
+            raise RuntimeError(f"send_message script not found: {send_script}")
+        cmd = ["node", str(send_script), msg]
+        p = subprocess.run(cmd, text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        if p.returncode != 0:
+            err_msg = (p.stderr or p.stdout or "").strip()
+            raise RuntimeError(f"Failed to send message via CDP ({p.returncode}):\n{err_msg}")
+        print(json.dumps({
+            "ok": True,
+            "sent": True,
+            "state_file": str(state_path),
+            "message": msg,
+            "output": p.stdout.strip()
+        }, indent=2))
+        return
+    if args.raw:
+        sys.stdout.write(msg)
+        return
+    print(json.dumps({
+        "ok": True,
+        "sent": False,
+        "state_file": str(state_path),
+        "message": msg
+    }, indent=2))
+
 def cleanup(args):
     state_path=pathlib.Path(args.state_file).expanduser()
     state=load_state(state_path)
@@ -583,6 +625,12 @@ def main():
     c=sub.add_parser("cleanup")
     c.add_argument("--state-file",required=True)
     c.set_defaults(func=cleanup)
+
+    m=sub.add_parser("message")
+    m.add_argument("--state-file",required=True)
+    m.add_argument("--send",action="store_true",help="Send wake-up message directly to ChatGPT Web using send_message.js")
+    m.add_argument("--raw",action="store_true",help="Print raw message text directly")
+    m.set_defaults(func=message)
 
     args=p.parse_args()
     try:

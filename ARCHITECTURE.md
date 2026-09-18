@@ -10,15 +10,22 @@ chatgpt-worker/
 │   ├── lifecycle.py
 │   ├── path_translate.py
 │   ├── protocol.py
-│   └── remote.sh
+│   ├── remote.sh
+│   ├── send_message.js       # Chrome DevTools Protocol automated messenger
+│   ├── auto_allow.swift      # macOS Accessibility API auto-approval daemon source
+│   ├── auto_allow.sh         # auto_allow smart launcher
+│   └── auto-allow-chrome.sh  # AppleScript fallback auto-allow daemon
 ├── examples/                 # shared project configuration examples
 ├── platforms/
 │   ├── antigravity/          # implemented host adapter
 │   ├── codex/                # placeholder
 │   └── claude/               # placeholder
-├── skills/chatgpt-worker/    # current Antigravity-discoverable skill entrypoint
+├── skills/
+│   ├── chatgpt-worker/       # primary workflow skill
+│   └── chatgpt-web-messenger/# browser messaging and auto-allow skill
 └── rules/                    # shared safety rules
 ```
+
 
 ## Shared contract
 
@@ -91,3 +98,20 @@ A fourth branch can be produced for integration:
 4. **Delivery branch** — rebuilt from the base branch by cherry-picking only recorded implementation commits. This branch contains no `.chatgpt-worker/` runtime and is suitable for PR/merge.
 
 Host adapters should call this lifecycle rather than reimplementing worktree/branch management.
+ 
+ 
+## Browser transport layer (CDP & auto_allow)
+
+ChatGPT Web automation relies on two dedicated primitives to eliminate user interruptions:
+
+1. **`scripts/send_message.js`**:
+   - Connects to Chrome DevTools Protocol over WebSocket (via `DevToolsActivePort`).
+   - Targets the open ChatGPT tab (`chatgpt.com/c/...` or `chatgpt.com`).
+   - **Always executes `location.reload()` before typing** to clear stale WebSockets and ProseMirror DOM states.
+   - Waits for `#prompt-textarea` to mount, injects text via CDP `Input.insertText`, clicks send, and verifies DOM delivery.
+
+2. **`scripts/auto_allow` / `auto_allow.sh`**:
+   - Native daemon running in the background on macOS using the Accessibility API (`AXUIElement`).
+   - Automatically detects and presses "Allow" on Chrome's "Allow remote debugging?" consent prompt within 500ms.
+   - Prevents popup interruptions when external CDP connections attach to port 9222.
+

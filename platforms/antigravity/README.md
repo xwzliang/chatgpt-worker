@@ -15,25 +15,22 @@ The installable Antigravity skill currently remains at `skills/chatgpt-worker/SK
 
 ## Browser control requirement
 
-ChatGPT Web interaction MUST use Antigravity's native `/browser` slash command.
+ChatGPT Web interaction uses direct Chrome DevTools Protocol (CDP) automation via `scripts/send_message.js` (or `lifecycle.py message --send`).
 
-Do not use any of the following as a substitute:
+Key requirements:
+1. **Always Refresh Page Before Sending**: ChatGPT Web frequently enters a stale or frozen DOM/WebSocket state if idle. The script automatically executes `location.reload()` before typing.
+2. **Auto-Approve Remote Debugging Prompts**: Chrome 136+ displays a modal prompt asking "Allow remote debugging?". The background `auto_allow` daemon (`scripts/auto_allow.sh start`) automatically detects and clicks "Allow" using macOS Accessibility API within ~500ms, eliminating interruptions.
+3. **No Subagent Research Loops**: Subagents must not spend time doing exploratory DOM research or reverse-engineering; they must execute the bundled script directly.
 
-- `osascript` / AppleScript;
-- shell-driven GUI automation;
-- simulated keyboard/mouse input;
-- Accessibility scripting;
-- launching Chrome and trying to type through OS automation.
+Recommended invocation:
 
-If `/browser` is unavailable or fails, report the blocker. Do not silently fall back to OS-level UI automation.
+```bash
+# Start auto-allow daemon in background (macOS only)
+bash scripts/auto_allow.sh start
 
-Recommended invocation pattern:
-
-```text
-/browser Open or focus the existing ChatGPT Web conversation for this chatgpt-worker task.
-Send exactly the following wake-up message without changing it:
-<message>
-After sending it, return control to the main agent.
+# Send wake-up message and verify delivery
+python3 scripts/lifecycle.py message --state-file <state-file> --send
 ```
 
-The main agent should then use Git polling via `lifecycle.py wait-response`; browser prose is not the completion signal.
+The main agent then uses Git polling via `lifecycle.py wait-response`; browser prose is not the completion signal.
+

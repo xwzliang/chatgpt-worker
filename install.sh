@@ -84,7 +84,24 @@ else
   git clone "$REPO_URL" "$DEST" >/dev/null
 fi
 
-chmod +x "$DEST/install.sh" "$DEST/scripts/"*.sh "$DEST/scripts/"*.py 2>/dev/null || true
+chmod +x "$DEST/install.sh" "$DEST/scripts/"*.sh "$DEST/scripts/"*.py "$DEST/scripts/"*.js 2>/dev/null || true
+
+# Compile native auto_allow daemon on macOS if swiftc is available
+if [[ "$(uname -s)" == "Darwin" ]] && command -v swiftc >/dev/null 2>&1; then
+  if [[ -f "$DEST/scripts/auto_allow.swift" ]]; then
+    echo "Compiling native auto_allow daemon..."
+    swiftc -O "$DEST/scripts/auto_allow.swift" -o "$DEST/scripts/auto_allow" 2>/dev/null || true
+    chmod +x "$DEST/scripts/auto_allow" 2>/dev/null || true
+  fi
+fi
+
+# Ensure global skills link for chatgpt-web-messenger
+GLOBAL_SKILLS="$HOME/.gemini/config/skills"
+if [[ -d "$DEST/skills/chatgpt-web-messenger" ]]; then
+  mkdir -p "$GLOBAL_SKILLS"
+  rm -rf "$GLOBAL_SKILLS/chatgpt-web-messenger"
+  ln -s "$DEST/skills/chatgpt-web-messenger" "$GLOBAL_SKILLS/chatgpt-web-messenger" 2>/dev/null || cp -r "$DEST/skills/chatgpt-web-messenger" "$GLOBAL_SKILLS/"
+fi
 
 relaunch_antigravity_macos() {
   if [[ "$(uname -s)" != "Darwin" ]]; then

@@ -451,16 +451,20 @@ The agent should actively review these after meaningful development/debugging wo
 
 ## Fully automated ChatGPT Web handoff
 
-Antigravity should not ask you to copy a wake-up message into ChatGPT Web or later reply with `check response`.
+Antigravity should not ask you to copy a wake-up message into ChatGPT Web or later reply with `check response`. Everything is self-contained and automated via the Chrome DevTools Protocol (CDP).
 
-For each worker request it should:
+For each worker request the automated flow is:
 
 ```text
 create/push request commit
         ↓
-Antigravity browser opens/focuses ChatGPT Web
+auto_allow daemon approves Chrome debugging prompt (if prompted)
         ↓
-Antigravity sends compact wake-up message itself
+send_message.js connects to Chrome via CDP
+        ↓
+send_message.js refreshes page first (clears stale sockets/DOM)
+        ↓
+send_message.js waits for #prompt-textarea and injects wake-up message
         ↓
 ChatGPT Web reads request from GitHub
         ↓
@@ -468,10 +472,67 @@ implementation commit
         ↓
 response commit with finished=true
         ↓
-Antigravity polls Git automatically
+Antigravity polls Git automatically (wait-response)
         ↓
 validate exact implementation commit
 ```
+
+### 1. Browser Messenger & Pre-Send Page Reload
+ChatGPT Web's ProseMirror editor frequently enters a stale or unresponsive state if left open in the background. The bundled messenger script (`scripts/send_message.js`) solves this by:
+1. Discovering the Chrome DevTools active port automatically.
+2. Attaching to the ChatGPT conversation tab (`chatgpt.com/c/...` or `chatgpt.com`).
+3. **Always refreshing the page (`location.reload()`)** before typing.
+4. Waiting for `#prompt-textarea` to mount and become interactive.
+5. Ingesting the message via CDP `Input.insertText` and clicking send.
+6. Verifying delivery in the DOM before returning.
+
+To send a message via lifecycle helper:
+```bash
+python3 scripts/lifecycle.py message --state-file <state-file> --send
+```
+
+Or run the script directly:
+```bash
+node scripts/send_message.js --file /path/to/message.txt
+# OR
+node scripts/send_message.js "Your message here"
+```
+
+### 2. Auto-Approving Chrome's Remote Debugging Prompts
+Modern Google Chrome (136+) shows a modal sheet:
+`"Allow remote debugging? An external app wants full control over this Chrome session to debug it..."`
+
+A background daemon handles this automatically using the macOS Accessibility API:
+
+```bash
+# Start auto-allow daemon
+bash scripts/auto_allow.sh start
+
+# Check status
+bash scripts/auto_allow.sh status
+
+# Stop daemon
+bash scripts/auto_allow.sh stop
+```
+
+The daemon automatically compiles native `scripts/auto_allow` with `swiftc` on first run (or falls back to AppleScript if `swiftc` is unavailable). It detects and clicks "Allow" within 500ms so you are never interrupted.
+
+### 3. Chrome Setup
+To enable Chrome DevTools remote debugging:
+- **Option A**: Open `chrome://inspect/#remote-debugging` in Chrome and verify the checkbox is enabled.
+- **Option B**: Start Chrome with remote debugging enabled:
+  ```bash
+  "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" --remote-debugging-port=9222 &
+  ```
+
+Run `scripts/doctor.sh` at any time to verify that your Git origin, Node.js, Chrome DevTools, and auto_allow are all in a ready state:
+```bash
+bash scripts/doctor.sh
+```
+
+---
+
+### 4. Git Polling & Verification
 
 The Git watcher is:
 
@@ -481,14 +542,12 @@ scripts/lifecycle.py wait-response \
 ```
 
 Defaults:
-
 - poll interval: 10 seconds
 - timeout: 1800 seconds
 
 These can be overridden with `--interval` and `--timeout`.
 
 A request is considered finished only when all of the following are true:
-
 1. the remote task branch has advanced beyond the request commit;
 2. the matching committed response JSON exists;
 3. `status` is `completed`;
@@ -516,4 +575,5 @@ Example response:
 
 Browser prose such as "done" is never the authoritative completion signal.
 
-If the watcher times out, Antigravity should inspect the same ChatGPT Web conversation itself. User involvement is only needed for a genuine blocker such as authentication, permissions, or an ambiguous decision—not for routine message relay or polling.
+If the watcher times out, Antigravity inspects the same ChatGPT Web conversation itself. User involvement is only needed for a genuine blocker such as authentication or an ambiguous decision—not for routine message relay or polling.
+
