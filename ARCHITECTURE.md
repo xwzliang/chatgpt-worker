@@ -7,7 +7,9 @@ chatgpt-worker/
 ├── scripts/                  # shared, platform-agnostic helpers
 │   ├── discover.py
 │   ├── doctor.sh
+│   ├── lifecycle.py
 │   ├── path_translate.py
+│   ├── protocol.py
 │   └── remote.sh
 ├── examples/                 # shared project configuration examples
 ├── platforms/
@@ -72,3 +74,20 @@ The browser/UI transport only wakes the worker and points it at the pending requ
 Communication runtime is intentionally excluded from the default branch after merge (`retain_on_merge = false`). The task branch is the durable audit history.
 
 The protocol is shared across all future host adapters, so Codex and Claude should reuse it rather than defining separate message formats.
+
+
+## Lifecycle layer
+
+`scripts/lifecycle.py` owns task-branch and worktree mechanics shared by every future host adapter.
+
+It deliberately separates three Git views:
+
+1. **Opened project** — user-controlled workspace; never switched to the worker task branch.
+2. **Control worktree** — local checkout of the audit/task branch containing Git communication runtime.
+3. **Validation worktree** — disposable detached checkout of the exact implementation commit; local or remote depending on project configuration.
+
+A fourth branch can be produced for integration:
+
+4. **Delivery branch** — rebuilt from the base branch by cherry-picking only recorded implementation commits. This branch contains no `.chatgpt-worker/` runtime and is suitable for PR/merge.
+
+Host adapters should call this lifecycle rather than reimplementing worktree/branch management.
