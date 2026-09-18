@@ -179,6 +179,7 @@ def start(args):
         "target_repo": info.get("target_repo"),
         "validation_commands": info.get("validation_commands", []),
         "path_mappings": info.get("path_mappings", []),
+        "browser": info.get("browser", {"transport": "cdp"}),
     }
     save_state(paths["state"], state)
     print(json.dumps({"ok": True, "state_file": str(paths["state"]), **state}, indent=2))
@@ -535,31 +536,75 @@ def message(args):
     state_path = pathlib.Path(args.state_file).expanduser()
     state = load_state(state_path)
     msg = make_wakeup_message(state)
-    if args.send:
-        send_script = SCRIPT_DIR / "send_message.js"
-        if not send_script.exists():
-            raise RuntimeError(f"send_message script not found: {send_script}")
-        cmd = ["node", str(send_script), msg]
+    browser = state.get("browser") or {}
+    transport = args.transport or browser.get("transport", "cdp")
+    if transport not in {"manual", "native", "cdp"}:
+        raise RuntimeError(f"unsupported browser transport: {transport}")
+
+    if args.raw:
+        sys.stdout.write(msg)
+        return
+
+    if not args.send:
+        print(json.dumps({
+            "ok": True,
+            "sent": False,
+            "transport": transport,
+            "state_file": str(state_path),
+            "message": msg
+        }, indent=2))
+        return
+
+    if transport == "manual":
+        print(json.dumps({
+            "ok": True,
+            "sent": False,
+            "manual_required": True,
+            "transport": transport,
+            "state_file": str(state_path),
+            "message": msg
+        }, indent=2))
+        return
+
+    if transport == "native":
+        native_script = SCRIPT_DIR / "send_native.py"
+        if not native_script.exists():
+            raise RuntimeError(f"native send script not found: {native_script}")
+        cmd = [
+            sys.executable, str(native_script),
+            "--message", msg,
+            "--macro-name", browser.get("uivision_macro_name", "ChatGPTClickSendExistingTab"),
+        ]
+        if browser.get("uivision_autorun_html"):
+            cmd += ["--uivision-html", browser["uivision_autorun_html"]]
         p = subprocess.run(cmd, text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
         if p.returncode != 0:
             err_msg = (p.stderr or p.stdout or "").strip()
-            raise RuntimeError(f"Failed to send message via CDP ({p.returncode}):\n{err_msg}")
+            raise RuntimeError(f"Failed to send message via native UI.Vision transport ({p.returncode}):\n{err_msg}")
         print(json.dumps({
             "ok": True,
             "sent": True,
+            "transport": transport,
             "state_file": str(state_path),
             "message": msg,
             "output": p.stdout.strip()
         }, indent=2))
         return
-    if args.raw:
-        sys.stdout.write(msg)
-        return
+
+    send_script = SCRIPT_DIR / "send_message.js"
+    if not send_script.exists():
+        raise RuntimeError(f"send_message script not found: {send_script}")
+    p = subprocess.run(["node", str(send_script), msg], text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    if p.returncode != 0:
+        err_msg = (p.stderr or p.stdout or "").strip()
+        raise RuntimeError(f"Failed to send message via CDP ({p.returncode}):\n{err_msg}")
     print(json.dumps({
         "ok": True,
-        "sent": False,
+        "sent": True,
+        "transport": transport,
         "state_file": str(state_path),
-        "message": msg
+        "message": msg,
+        "output": p.stdout.strip()
     }, indent=2))
 
 def cleanup(args):
@@ -628,7 +673,8 @@ def main():
 
     m=sub.add_parser("message")
     m.add_argument("--state-file",required=True)
-    m.add_argument("--send",action="store_true",help="Send wake-up message directly to ChatGPT Web using send_message.js")
+    m.add_argument("--send",action="store_true",help="Send using the configured browser transport")
+    m.add_argument("--transport",choices=["manual","native","cdp"],help="Override configured browser transport for this send")
     m.add_argument("--raw",action="store_true",help="Print raw message text directly")
     m.set_defaults(func=message)
 
