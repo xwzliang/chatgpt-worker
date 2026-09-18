@@ -5,20 +5,22 @@ PLUGIN_NAME="chatgpt-worker"
 REPO_URL="${CHATGPT_WORKER_REPO_URL:-https://github.com/xwzliang/chatgpt-worker.git}"
 MODE="ide"
 DEST=""
+RELAUNCH=1
 
 usage() {
   cat <<'USAGE'
 Install or update chatgpt-worker for Google Antigravity.
 
 Usage:
-  bash install.sh [--ide|--cli] [--dest PATH]
+  bash install.sh [--ide|--cli] [--dest PATH] [--no-relaunch]
 
 Options:
-  --ide       Install for the Antigravity IDE (default).
-              Default: ~/.gemini/config/plugins/chatgpt-worker
-  --cli       Install with agy plugin install for Antigravity CLI.
-  --dest PATH Override the IDE destination directory.
-  -h, --help  Show this help.
+  --ide          Install for the Antigravity IDE (default).
+                 Default: ~/.gemini/config/plugins/chatgpt-worker
+  --cli          Install with agy plugin install for Antigravity CLI.
+  --dest PATH    Override the IDE destination directory.
+  --no-relaunch  Do not relaunch Antigravity IDE after installation.
+  -h, --help     Show this help.
 
 Environment:
   CHATGPT_WORKER_REPO_URL  Override the Git repository URL.
@@ -32,6 +34,7 @@ while [[ $# -gt 0 ]]; do
     --dest)
       [[ $# -ge 2 ]] || { echo "--dest requires a path" >&2; exit 2; }
       DEST="$2"; shift 2 ;;
+    --no-relaunch) RELAUNCH=0; shift ;;
     -h|--help) usage; exit 0 ;;
     *) echo "Unknown argument: $1" >&2; usage >&2; exit 2 ;;
   esac
@@ -83,12 +86,50 @@ fi
 
 chmod +x "$DEST/install.sh" "$DEST/scripts/remote.sh" 2>/dev/null || true
 
+relaunch_antigravity_macos() {
+  if [[ "$(uname -s)" != "Darwin" ]]; then
+    echo "Automatic relaunch is currently implemented for macOS only."
+    return 0
+  fi
+
+  if [[ ! -d "/Applications/Antigravity IDE.app" ]]; then
+    echo "Antigravity IDE.app was not found in /Applications; skipping relaunch."
+    return 0
+  fi
+
+  echo
+  echo "Relaunching Antigravity IDE..."
+
+  # Ask the app to quit cleanly first so open windows/state can be saved.
+  osascript -e 'tell application "Antigravity IDE" to quit' >/dev/null 2>&1 || true
+
+  # Wait briefly for the Electron process tree to exit.
+  for _ in {1..40}; do
+    if ! pgrep -f '/Applications/Antigravity IDE.app/Contents/' >/dev/null 2>&1; then
+      break
+    fi
+    sleep 0.25
+  done
+
+  # Match cockpit-tools' macOS launch behavior: start a fresh LaunchServices instance.
+  if open -n -a "Antigravity IDE"; then
+    echo "Antigravity IDE relaunched."
+  else
+    echo "Plugin installed, but Antigravity IDE could not be relaunched automatically." >&2
+    echo "Please launch Antigravity IDE manually." >&2
+  fi
+}
+
 echo
 echo "Installed $PLUGIN_NAME for Antigravity IDE:"
 echo "  $DEST"
+
+if [[ "$RELAUNCH" -eq 1 ]]; then
+  relaunch_antigravity_macos
+fi
+
 echo
 echo "Next steps:"
 echo "  1. Configure ~/.ssh/config (see examples/ssh-config.example)."
 echo "  2. Optionally export CHATGPT_WORKER_HOST=<ssh-alias>."
-echo "  3. Restart/reload Antigravity if the plugin is not discovered immediately."
-echo "  4. Invoke /chatgpt-worker or ask Antigravity to delegate a coding task to ChatGPT Web."
+echo "  3. Invoke /chatgpt-worker or ask Antigravity to delegate a coding task to ChatGPT Web."
