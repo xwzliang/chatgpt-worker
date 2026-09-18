@@ -99,7 +99,9 @@ ChatGPT Web must create the corresponding JSON response, for example:
   "protocol_version": 1,
   "request_id": "0001",
   "status": "completed",
+  "finished": true,
   "implementation_commit": "0123456789abcdef",
+  "finish_message": "Implementation is complete and pushed.",
   "summary": "Implemented the requested change.",
   "files_changed": [
     "src/example.py"
@@ -113,7 +115,9 @@ Required fields:
 - `protocol_version`: currently `1`
 - `request_id`: must match the request filename
 - `status`: `completed`, `blocked`, or `failed`
+- `finished`: must be `true` when status is `completed`
 - `implementation_commit`: SHA of the code implementation commit when status is `completed`
+- `finish_message`: non-empty completion message when status is `completed`
 - `summary`: short description
 
 Optional:
@@ -139,7 +143,7 @@ Read .chatgpt-worker/PROTOCOL.md and the pending request file in the repository.
 Make the requested code changes and commit them first. Then write the corresponding response JSON containing that implementation commit SHA, commit the response file separately, and push both commits.
 ```
 
-The host must not treat prose in the browser UI as authoritative completion. Completion is recognized from the Git response file after fetch/pull.
+The host must not treat prose in the browser UI as authoritative completion. Completion is recognized only when the task branch advances beyond the request commit and the committed Git response file validates with `status="completed"` and `finished=true`.
 
 ## Orchestrator loop
 
