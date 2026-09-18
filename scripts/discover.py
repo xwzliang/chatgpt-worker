@@ -50,7 +50,7 @@ def normalize_origin(url: str) -> str:
 def load_config(repo: pathlib.Path) -> tuple[pathlib.Path, dict]:
     path = repo / CONFIG_NAME
     if not path.is_file():
-        raise FileNotFoundError(f"{CONFIG_NAME} not found at repository root: {repo}")
+        raise FileNotFoundError(f"CONFIG_MISSING:{path}")
     with path.open("rb") as f:
         cfg = tomllib.load(f)
     return path, cfg
