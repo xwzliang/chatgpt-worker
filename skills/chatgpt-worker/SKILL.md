@@ -9,6 +9,52 @@ Use Antigravity as the orchestrator and reviewer. Use ChatGPT Web as the coding 
 
 The currently opened Antigravity project folder is the source of project identity.
 
+## First-run configuration
+
+If the opened repository does not contain `.chatgpt-worker.toml`, do not fail immediately. Run:
+
+    "$PLUGIN_ROOT/scripts/configure.py" inspect --project "$PWD"
+
+Use the returned project root and concrete SSH aliases to guide setup.
+
+Ask the user only for information that cannot be inferred safely.
+
+For every new project, first ask whether execution should be:
+
+- local: validation/worktrees run on the Mac;
+- remote: validation/worktrees run on a remote machine over SSH.
+
+If the user chooses local:
+
+1. optionally inspect the project for likely validation commands;
+2. ask which validation commands should be used only when they are not obvious or the user wants custom commands;
+3. write `.chatgpt-worker.toml` with `configure.py write --execution local`;
+4. keep the default branch prefix, max iterations, and communication settings unless the user asks to change them;
+5. run doctor again and continue only when READY.
+
+If the user chooses remote:
+
+1. read concrete Host aliases from `~/.ssh/config` using `configure.py inspect`;
+2. present the aliases and ask which connection should be used;
+3. after the host is selected, test SSH connectivity;
+4. ask for one or more remote repo roots to search, unless they can be inferred from a clearly established convention;
+5. ask for optional remote-to-local path mappings when relevant. For the known shared OMV mount, a typical mapping is `/mnt/omv=/Volumes/omv`;
+6. optionally inspect the project for likely validation commands and ask only when necessary;
+7. write `.chatgpt-worker.toml` with `configure.py write --execution remote --host ... --repo-root ...`;
+8. run doctor again and continue only when READY.
+
+Do not invent an SSH alias, repo root, or path mapping. Do not overwrite an existing config without explicit user approval.
+
+Example write commands:
+
+    "$PLUGIN_ROOT/scripts/configure.py" write       --project "$PWD"       --execution local       --validation-command "npm test"
+
+    "$PLUGIN_ROOT/scripts/configure.py" write       --project "$PWD"       --execution remote       --host ai-server       --repo-root /mnt/omv/git       --path-mapping /mnt/omv=/Volumes/omv       --validation-command "pytest -q"
+
+After writing the file, always run:
+
+    "$PLUGIN_ROOT/scripts/doctor.sh" "$PWD"
+
 ## Mandatory project discovery
 
 Before delegating a task, locate the Git root of the opened project and read .chatgpt-worker.toml from that repository root.
@@ -242,7 +288,7 @@ Keep repair messages compact. Include the smallest useful error excerpts rather 
 
 Stop and report instead of continuing when:
 
-- .chatgpt-worker.toml is missing or invalid;
+- .chatgpt-worker.toml is invalid after setup, or the user declines/cannot complete first-run configuration;
 - remote execution is selected but SSH cannot connect;
 - zero or multiple remote repositories match the local Git origin;
 - the maximum iteration count is reached;
