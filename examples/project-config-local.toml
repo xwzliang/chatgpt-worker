@@ -1,0 +1,11 @@
+execution = "local"
+
+branch_prefix = "chatgpt-worker/"
+max_iterations = 5
+
+[validation]
+commands = [
+  "npm run typecheck",
+  "npm test",
+  "npm run build",
+]
