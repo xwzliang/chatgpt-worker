@@ -96,8 +96,8 @@ def check_response(args):
         errors.append("invalid status")
     if not isinstance(data.get("summary"), str) or not data.get("summary","").strip():
         errors.append("summary is required")
-    if data.get("status") == "completed" and not isinstance(data.get("commit"), str):
-        errors.append("commit is required for completed response")
+    if data.get("status") == "completed" and not isinstance(data.get("implementation_commit"), str):
+        errors.append("implementation_commit is required for completed response")
     result={"ok": not errors, "ready": True, "path": str(path), "response": data, "errors": errors}
     if args.json:
         print(json.dumps(result, indent=2))
