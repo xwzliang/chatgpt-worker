@@ -521,6 +521,33 @@ def status(args):
         result["validation_worktree_exists"] = None
     print(json.dumps({"ok": True, **result}, indent=2))
 
+def ensure_auto_allow(browser: dict[str, Any], transport: str) -> dict[str, Any]:
+    enabled = bool(browser.get("auto_allow", False))
+    if not enabled or transport == "manual":
+        return {"enabled": enabled, "started": False, "skipped": True}
+
+    script = SCRIPT_DIR / "auto_allow.sh"
+    if not script.is_file():
+        raise RuntimeError(f"auto_allow is enabled but launcher script is missing: {script}")
+
+    p = subprocess.run(
+        ["bash", str(script), "start"],
+        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+    )
+    if p.returncode != 0:
+        raise RuntimeError(
+            "auto_allow is enabled but could not be started: " +
+            ((p.stderr or p.stdout or "").strip() or f"exit {p.returncode}")
+        )
+    return {
+        "enabled": True,
+        "started": True,
+        "skipped": False,
+        "output": (p.stdout or "").strip(),
+    }
+
 def make_wakeup_message(state: dict[str, Any]) -> str:
     return (
         "Continue the chatgpt-worker task.\n\n"
@@ -561,10 +588,13 @@ def message(args):
             "sent": False,
             "manual_required": True,
             "transport": transport,
+            "auto_allow": {"enabled": bool(browser.get("auto_allow", False)), "started": False, "skipped": True},
             "state_file": str(state_path),
             "message": msg
         }, indent=2))
         return
+
+    auto_allow_result = ensure_auto_allow(browser, transport)
 
     if transport == "native":
         native_script = SCRIPT_DIR / "send_native.py"
@@ -585,6 +615,7 @@ def message(args):
             "ok": True,
             "sent": True,
             "transport": transport,
+            "auto_allow": auto_allow_result,
             "state_file": str(state_path),
             "message": msg,
             "output": p.stdout.strip()
@@ -602,6 +633,7 @@ def message(args):
         "ok": True,
         "sent": True,
         "transport": transport,
+        "auto_allow": auto_allow_result,
         "state_file": str(state_path),
         "message": msg,
         "output": p.stdout.strip()
