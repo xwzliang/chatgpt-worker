@@ -48,8 +48,11 @@ For every new project, ask two independent choices:
    - manual: prepare the wake-up message but require the user to paste/send it;
    - native: use CDP only to reload the existing ChatGPT page and insert the text, then use the UI.Vision `ChatGPTClickSendExistingTab` macro to perform the final `XClick`;
    - cdp: use `send_message.js` for reload, insertion, send, and DOM verification.
+3. for automated transports (native/cdp), ask whether `auto_allow` should be enabled. Store the answer in `[browser].auto_allow`. Default to false if the user does not opt in.
 
 Do not describe native as undetectable or human-equivalent; it is still automation.
+
+When `[browser].auto_allow = true`, do not separately manage the daemon in ad hoc steps. Always use `lifecycle.py message --send`; the lifecycle automatically runs `auto_allow.sh start` before each automated send. The start operation is idempotent, so an already-running daemon is reused.
 
 If the user chooses native, use `configure.py inspect` to detect existing UI.Vision autorun HTML and the installed `ChatGPTClickSendExistingTab` macro. If the macro is missing, instruct the user to update/install `xwzliang/my_uivision` before continuing. If no autorun HTML is found, ask for its path or instruct the user to generate one from UI.Vision Settings > API.
 
@@ -238,6 +241,7 @@ The UI.Vision autorun HTML can be configured with:
 
     [browser]
     transport = "native"
+    auto_allow = true
     uivision_autorun_html = "/Users/you/uivision/ui.vision.html"
     uivision_macro_name = "ChatGPTClickSendExistingTab"
 
@@ -246,6 +250,15 @@ If the HTML path is omitted, the helper also checks `$UIV_HTML`, `$UIVISION_AUTO
 ### cdp
 
 Use the existing direct CDP messenger. It reloads, inserts text, clicks Send, and verifies delivery in the DOM.
+
+### auto_allow
+
+Optional browser setting:
+
+    [browser]
+    auto_allow = false
+
+If set to `true`, every automated `native` or `cdp` send must first ensure the bundled `auto_allow` daemon is running. This is handled inside `lifecycle.py message --send`; Antigravity should not manually duplicate the startup logic. Manual transport does not start `auto_allow` because it does not attach through the automated send path.
 
 Regardless of transport, browser-visible prose is never authoritative completion. After sending, use:
 
