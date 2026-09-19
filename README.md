@@ -456,6 +456,7 @@ Each project can select one of three browser transports:
 ```toml
 [browser]
 transport = "manual" # manual | native | cdp
+auto_allow = false
 ```
 
 - **manual**: chatgpt-worker prepares the exact wake-up message but does not operate ChatGPT Web. The user pastes/sends it.
@@ -463,6 +464,43 @@ transport = "manual" # manual | native | cdp
 - **cdp**: the existing `send_message.js` handles reload, text insertion, Send, and DOM delivery verification.
 
 All three modes still use Git as the authoritative completion channel. The `native` mode is still automation; it is provided as an alternate interaction mechanism, not as a claim of human-equivalent or undetectable input.
+
+### Optional auto_allow
+
+You can configure whether chatgpt-worker automatically starts the bundled Chrome remote-debugging approval daemon:
+
+```toml
+[browser]
+transport = "cdp"
+auto_allow = true
+```
+
+When `auto_allow = true` and the transport is `native` or `cdp`, every:
+
+```bash
+python3 scripts/lifecycle.py message --state-file <state-file> --send
+```
+
+first runs:
+
+```bash
+bash scripts/auto_allow.sh start
+```
+
+before attaching/sending. The launcher is idempotent: if the daemon is already running, it is reused.
+
+When `auto_allow = false`, chatgpt-worker does not start it.
+
+Manual transport never starts `auto_allow` because no automated browser attachment/send is performed.
+
+The first-run configurator supports:
+
+```bash
+--auto-allow
+--no-auto-allow
+```
+
+and defaults to disabled unless explicitly enabled.
 
 ### Native UI.Vision prerequisite
 
