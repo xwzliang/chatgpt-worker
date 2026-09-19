@@ -85,6 +85,7 @@ def render_remote(args) -> str:
         '',
         '[browser]',
         f'transport = {toml_quote(args.browser_transport)}',
+        f'auto_allow = {str(args.auto_allow).lower()}',
     ]
     if args.uivision_autorun_html:
         lines.append(f'uivision_autorun_html = {toml_quote(args.uivision_autorun_html)}')
