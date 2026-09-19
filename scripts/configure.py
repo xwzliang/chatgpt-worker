@@ -49,6 +49,7 @@ def render_local(args) -> str:
         '',
         '[browser]',
         f'transport = {toml_quote(args.browser_transport)}',
+        f'auto_allow = {str(args.auto_allow).lower()}',
     ]
     if args.uivision_autorun_html:
         lines.append(f'uivision_autorun_html = {toml_quote(args.uivision_autorun_html)}')
@@ -158,7 +159,7 @@ def cmd_write(args):
     else:
         content=render_remote(args)
     config.write_text(content,encoding="utf-8")
-    print(json.dumps({"ok":True,"config_path":str(config),"execution":args.execution,"browser_transport":args.browser_transport},indent=2))
+    print(json.dumps({"ok":True,"config_path":str(config),"execution":args.execution,"browser_transport":args.browser_transport,"auto_allow":args.auto_allow},indent=2))
 
 def main():
     p=argparse.ArgumentParser(description="First-run configuration helper for chatgpt-worker")
@@ -179,6 +180,7 @@ def main():
     w.add_argument("--branch-prefix",default="chatgpt-worker/")
     w.add_argument("--max-iterations",type=int,default=5)
     w.add_argument("--browser-transport",choices=["manual","native","cdp"],default="cdp")
+    w.add_argument("--auto-allow",action=argparse.BooleanOptionalAction,default=False)
     w.add_argument("--uivision-autorun-html")
     w.add_argument("--uivision-macro-name",default="ChatGPTClickSendExistingTab")
     w.add_argument("--force",action="store_true")
