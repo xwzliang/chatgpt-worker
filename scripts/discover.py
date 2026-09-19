@@ -129,8 +129,10 @@ def browser_config(cfg: dict) -> dict:
         raise ValueError('[browser].transport must be "manual", "native", or "cdp"')
     html = browser.get("uivision_autorun_html")
     macro = str(browser.get("uivision_macro_name", "ChatGPTClickSendExistingTab")).strip() or "ChatGPTClickSendExistingTab"
+    auto_allow = bool(browser.get("auto_allow", False))
     return {
         "transport": transport,
+        "auto_allow": auto_allow,
         "uivision_autorun_html": str(html).strip() if html is not None and str(html).strip() else None,
         "uivision_macro_name": macro,
     }
