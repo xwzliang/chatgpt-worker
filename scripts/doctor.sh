@@ -59,6 +59,7 @@ browser=d.get("browser", {})
 transport=browser.get("transport", "cdp")
 browser_ready = True
 print(f"  Mode:           {transport}")
+print(f"  auto_allow:     {browser.get('auto_allow', False)}")
 
 if transport == "manual":
     print("  Automation:     none (user sends the prepared wake-up message manually)")
@@ -118,18 +119,22 @@ else:
     elif platform.system() == "Darwin":
         script_dir = pathlib.Path(sys.argv[2])
         auto_allow_bin = script_dir / "auto_allow"
+        auto_allow_enabled = bool(browser.get("auto_allow", False))
         is_running = False
         try:
             p = subprocess.run(["pgrep", "-f", "auto_allow"], stdout=subprocess.PIPE, text=True)
             is_running = p.returncode == 0 and bool(p.stdout.strip())
         except Exception:
             pass
-        if is_running:
-            print("  auto_allow:     ✓ RUNNING")
-        elif auto_allow_bin.exists() and os.access(auto_allow_bin, os.X_OK):
-            print("  auto_allow:     ✓ Built (not running)")
+        if not auto_allow_enabled:
+            print("  auto_allow run: disabled by config")
+        elif is_running:
+            print("  auto_allow run: ✓ RUNNING")
+        elif (script_dir / "auto_allow.sh").is_file():
+            print("  auto_allow run: ✓ Will start automatically before send")
         else:
-            print("  auto_allow:     ! Not built/running")
+            print("  auto_allow run: ✗ launcher missing")
+            browser_ready = False
 
 ready = bool(d.get("origin_verified")) and bool(d.get("target_repo")) and browser_ready
 print()
