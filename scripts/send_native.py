@@ -36,7 +36,15 @@ def candidate_uivision_html(explicit: str | None) -> pathlib.Path:
 
 def launch_url(url: str):
     if sys.platform == "darwin":
-        cmd = ["open", url]
+        # Using AppleScript to tell Google Chrome directly ensures query parameters
+        # on file:// URLs are preserved and the UI.Vision extension executes immediately.
+        # It also brings Chrome to the front for reliable native XClick execution.
+        safe_url = url.replace("\\", "\\\\").replace('"', '\\"')
+        script = f'''tell application "Google Chrome"
+            activate
+            open location "{safe_url}"
+        end tell'''
+        cmd = ["osascript", "-e", script]
     elif sys.platform.startswith("linux"):
         cmd = ["xdg-open", url]
     else:
@@ -53,9 +61,9 @@ def wait_log(path: pathlib.Path, timeout: float):
             text = path.read_text(encoding="utf-8", errors="ignore")
             last = text
             low = text.lower()
-            if "macro completed" in low:
+            if "status=ok" in low or "macro completed" in low:
                 return True, text
-            if "macro failed" in low or "error" in low:
+            if "status=error" in low or "macro failed" in low or "[error]" in low:
                 return False, text
         time.sleep(0.5)
     return False, last

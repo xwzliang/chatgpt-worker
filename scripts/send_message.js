@@ -230,6 +230,19 @@ async function main() {
     await sleep(800);
 
     if (prepareOnly) {
+        // Ensure the ChatGPT tab title has a predictable prefix so that
+        // external automation like UI.Vision (which selects tabs by title)
+        // can find this exact tab without failing if ChatGPT's conversation
+        // title replaced the default "ChatGPT" title.
+        await send('Runtime.evaluate', {
+            expression: `(() => {
+                const current = (document.title || '').trim();
+                if (!current.startsWith('ChatGPT')) {
+                    document.title = 'ChatGPT - ' + (current || 'Conversation');
+                }
+            })()`,
+            returnByValue: true
+        }, sessionId);
         console.log('>>> PREPARED: Message inserted; send button intentionally not clicked. <<<');
         ws.close();
         process.exit(0);
@@ -243,8 +256,9 @@ async function main() {
                 const sendBtn = document.querySelector('button[data-testid="send-button"]') ||
                                 document.querySelector('#composer-submit-button') ||
                                 document.querySelector('button[aria-label="Send prompt"]') ||
-                                document.querySelector('button[aria-label="Send message"]');
-                if (sendBtn && !sendBtn.disabled) {
+                                document.querySelector('button[aria-label="Send message"]') ||
+                                document.querySelector('.composer-submit-button-color');
+                if (sendBtn && !sendBtn.disabled && sendBtn.getAttribute('aria-disabled') !== 'true') {
                     sendBtn.click();
                     return { clicked: true, method: 'button' };
                 }
