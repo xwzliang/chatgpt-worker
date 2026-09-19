@@ -17,10 +17,11 @@ Before starting worker execution:
 - use the opened workspace/repository as project scope;
 - ensure .chatgpt-worker.toml exists, running guided first-run configuration if needed;
 - use the Git-backed task-branch communication protocol;
-- use lifecycle.py message --send so the configured [browser].transport (manual/native/cdp) is respected;
+- use lifecycle.py message --send so the configured [browser].transport (manual/native/cdp) and [browser].auto_allow settings are respected;
 - do not bypass the configured transport by calling send_message.js directly;
 - in native mode, use CDP only for reload/text insertion and UI.Vision XClick for the final Send action;
 - in cdp mode, use the bundled send_message.js direct messenger;
+- if [browser].auto_allow=true, let lifecycle.py automatically start/reuse auto_allow before every automated send; do not duplicate daemon startup logic;
 - in manual mode, require the user to paste/send the prepared wake-up message;
 - never ask the user to relay routine messages to ChatGPT Web or to say "check response";
 - poll Git for a committed finished response instead of relying on browser prose;
