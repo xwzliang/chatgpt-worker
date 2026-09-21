@@ -421,6 +421,8 @@ This creates:
     ├── chatgpt-worker.md
     └── project-lessons.md
 
+AGENTS.md
+
 ~/.gemini/config/skills/
 └── chatgpt-worker-learnings/
     └── SKILL.md
@@ -440,13 +442,27 @@ Use three distinct scopes:
 
 2. **Repository-specific durable lessons**
    - `.agents/rules/project-lessons.md`
-   - architecture invariants, setup requirements, recurring repository-specific traps and conventions.
+   - contains the mandatory project-lessons policy plus verified repository-specific traps/invariants.
 
-3. **Cross-project reusable lessons**
+3. **Repository-root agent instructions**
+   - `AGENTS.md`
+   - chatgpt-worker preserves existing content and inserts/updates a managed copy of the mandatory project-lessons policy for Antigravity/Codex-compatible agents.
+
+4. **Cross-project reusable lessons**
    - `~/.gemini/config/skills/chatgpt-worker-learnings/SKILL.md`
    - verified, portable engineering techniques and traps useful in other projects.
 
-The agent should actively review these after meaningful development/debugging work, but only persist durable, verified information. One-off task details, secrets, temporary logs, machine-specific paths, and unverified guesses should not be promoted.
+Before coding/debugging/refactoring, the agent must consult the project lessons. Before concluding a non-trivial task that diagnosed a root cause, fixed broken behavior, discovered a framework quirk, established an architectural invariant, or exposed a tooling/test gotcha, it must proactively add or refine a verified lesson. This is part of Definition of Done.
+
+Existing `AGENTS.md` content is preserved. chatgpt-worker owns only the section between:
+
+```text
+<!-- chatgpt-worker:project-lessons-policy:begin -->
+...
+<!-- chatgpt-worker:project-lessons-policy:end -->
+```
+
+Likewise, existing project lessons are preserved while the managed policy section is migrated/updated. One-off task details, secrets, temporary logs, machine-specific paths, and unverified guesses should not be promoted.
 
 
 ## ChatGPT Web message transports
