@@ -20,7 +20,8 @@ On the first explicit use of chatgpt-worker in a repository, bootstrap persisten
 This creates:
 
 - `.agents/rules/chatgpt-worker.md`: tells Antigravity to use chatgpt-worker automatically for substantive repository-changing coding/debugging tasks unless the user explicitly opts out;
-- `.agents/rules/project-lessons.md`: durable repository-specific lessons;
+- `.agents/rules/project-lessons.md`: durable repository-specific lessons plus the mandatory lesson-maintenance policy;
+- `AGENTS.md`: preserves any existing project instructions and adds/updates a managed chatgpt-worker project-lessons policy section so Antigravity/Codex-compatible agents see the same requirements;
 - `~/.gemini/config/skills/chatgpt-worker-learnings/SKILL.md`: curated cross-project reusable engineering lessons.
 
 Do not overwrite user-edited files automatically. The bootstrap helper creates missing files and preserves existing ones unless explicitly forced.
@@ -371,50 +372,45 @@ If a validation command or remote job reports an artifact under a mapped remote 
 
 The helper scripts/path_translate.py can translate an individual remote path using the project config.
 
-## Active learning maintenance
+## Mandatory project lesson workflow
 
-After meaningful implementation, debugging, testing, or review work, actively consider whether a durable lesson was learned.
+Project lesson maintenance is part of the engineering workflow, not an optional post-task activity.
 
-Classify lessons before persisting them:
+### Before coding/debugging/refactoring
 
-### Repository-specific durable lessons
+Before making changes, consult:
 
-Write to:
+- `.agents/rules/project-lessons.md`;
+- the chatgpt-worker managed project-lessons policy section in repository-root `AGENTS.md`.
 
-    .agents/rules/project-lessons.md
+Use those lessons to avoid re-introducing known regressions, violating established invariants, or repeating framework/tooling mistakes.
 
-Use this for verified knowledge that will likely help future work in the current repository but is not broadly portable, such as:
+### Before concluding a non-trivial task
 
-- architecture invariants;
-- required setup/test commands;
-- repository-specific build traps;
-- local conventions that prevent regressions.
+If the task involved any of the following, proactively add or refine a verified project lesson before declaring completion:
+
+- a non-obvious root cause was diagnosed;
+- broken behavior was fixed, including blocked clicks, layout shifts, coordinate offsets, stale state, performance lag, stuck cursors, or similar regressions;
+- a framework/library quirk was discovered and solved;
+- an architectural invariant was established;
+- a build/test/setup/tooling gotcha was encountered.
+
+This update is part of **Definition of Done**. Do not wait for the user to ask or remind you.
+
+Repository-specific entries belong in `.agents/rules/project-lessons.md` and should use:
+
+- **Trap / Problem**: concise symptom and verified root cause.
+- **Rule / Invariant**: concrete rule or pattern that prevents recurrence.
+
+Do not add one-off temporary debugging states, scratch paths, secrets, credentials, personal information, unverified hypotheses, or narrative conversation history.
 
 ### Cross-project reusable lessons
 
-Write to:
+If a verified lesson is genuinely useful beyond the current repository, also curate it into:
 
     ~/.gemini/config/skills/chatgpt-worker-learnings/SKILL.md
 
-Use this only for verified techniques, traps, or practices that can reasonably help future work in other repositories.
-
-A cross-project lesson should be concise and actionable, ideally recording:
-
-- When: recognizable context/symptom;
-- Lesson: reusable rule;
-- Why: concise evidence/reason;
-- Action: what to do next time.
-
-Do not promote:
-
-- one-off task details;
-- temporary debugging state;
-- secrets, credentials, personal data;
-- repository-specific names/paths/IDs;
-- unverified guesses;
-- information already clearly documented elsewhere unless the lesson is about how to find/use it.
-
-Prefer quality over volume. Maintaining these files means pruning or refining obsolete/duplicated lessons when appropriate, not only appending forever.
+Prefer quality over volume. Refine or prune obsolete/duplicated lessons when appropriate.
 
 ## Feedback format
 
