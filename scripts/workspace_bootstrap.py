@@ -30,31 +30,54 @@ Before starting worker execution:
 
 If the user says phrases such as "don't use chatgpt-worker", "do this directly", or otherwise clearly opts out, respect that request for the current task.
 
-After meaningful development/debugging work, review whether any durable lesson should be persisted:
-- repository-specific durable conventions/traps -> .agents/rules/project-lessons.md;
+Mandatory lesson workflow:
+- BEFORE coding, debugging, or refactoring, consult both .agents/rules/project-lessons.md and the chatgpt-worker managed project-lessons section in AGENTS.md.
+- BEFORE concluding any non-trivial task that diagnosed a root cause, fixed broken behavior, discovered a framework quirk, established an architectural invariant, or exposed a tooling/test gotcha, proactively add or refine the verified project lesson.
+- Treat this lesson update as part of Definition of Done; do not wait for the user to remind you.
+- repository-specific durable conventions/traps -> .agents/rules/project-lessons.md and keep the managed AGENTS.md policy intact;
 - truly cross-project reusable engineering techniques/traps -> the global chatgpt-worker-learnings skill.
 Do not persist one-off task details, secrets, credentials, temporary paths, transient failures, or unverified guesses.
 """
 
-PROJECT_LESSONS = """# Project lessons
+PROJECT_LESSONS = """# Project Lessons & Mandatory Engineering Rules
 
-Maintain concise, durable lessons that are useful for future work in THIS repository.
+> [!IMPORTANT]
+> **MANDATORY AGENT WORKFLOW RULE**:
+> 1. **Before any coding, debugging, or refactoring**: Consult the lessons and traps in this file to avoid re-introducing documented regressions or fighting known framework pitfalls.
+> 2. **Before concluding ANY task**: If the task involved diagnosing an unexpected bug, fixing broken behavior (such as blocked clicks, layout shifts, coordinate offsets, performance lag, or stuck cursors), or learning a non-obvious framework behavior (for example SwiftUI, AppKit, PDFKit, SQLite, browser automation, build systems, or other project frameworks), **YOU MUST PROACTIVELY UPDATE THIS FILE** before declaring completion.
+> 3. **Definition of Done**: Updating this file with verified traps and durable rules is part of the definition of done for non-trivial tasks. Do not wait for the user to ask or remind you.
 
-Only add a lesson when it is verified and likely to recur. Prefer actionable rules over narrative history.
+---
 
-Good examples:
-- required test commands or setup steps that are easy to miss;
-- architectural invariants;
-- recurring framework/build-system traps;
-- repository-specific conventions that prevent regressions.
+## Lesson Maintenance Protocol
 
-Do not add:
-- one-off task details;
-- temporary debugging state;
-- secrets or credentials;
-- personal information;
-- speculative/unverified conclusions.
+### Mandatory Update Triggers
+
+Add or refine a lesson whenever:
+
+- **Root Cause Diagnosed**: A non-obvious failure cause was identified, such as event interception, coordinate shifts, view thrashing, stale state, invalid caching assumptions, or hidden lifecycle behavior.
+- **Framework Quirk Discovered**: An unexpected behavior in the project's frameworks or libraries was solved with a specific workaround.
+- **Architectural Invariant Established**: A design decision was made that must be maintained across sessions to avoid regressions.
+- **Tooling / Test Gotcha Encountered**: A specific build command, test isolation requirement, environment constraint, or setup step was learned.
+
+### Entry Format
+
+Structure each entry concisely with actionable rules:
+
+- **Trap / Problem**: Concise description of symptom and root cause.
+- **Rule / Invariant**: Concrete coding rule or pattern to prevent recurrence.
+
+### What NOT to Add
+
+- One-off temporary debugging states or scratch script paths.
+- Secrets, credentials, or personal information.
+- Unverified hypotheses or narrative conversation history.
+
+## Verified Project Lessons
+
+<!-- Add concise verified lessons below this line. -->
 """
+
 
 GLOBAL_SKILL = """---
 name: chatgpt-worker-learnings
@@ -88,6 +111,37 @@ Do not copy raw logs or project history here. Repository-specific lessons belong
 <!-- Curated lessons are appended below this line. -->
 """
 
+AGENTS_BEGIN = "<!-- chatgpt-worker:project-lessons-policy:begin -->"
+AGENTS_END = "<!-- chatgpt-worker:project-lessons-policy:end -->"
+
+def agents_policy_section() -> str:
+    return (
+        AGENTS_BEGIN + "\n"
+        + PROJECT_LESSONS.rstrip() + "\n"
+        + AGENTS_END + "\n"
+    )
+
+def ensure_managed_section(path: pathlib.Path, section: str, begin: str, end: str):
+    path.parent.mkdir(parents=True, exist_ok=True)
+    if not path.exists():
+        path.write_text(section, encoding="utf-8")
+        return "created"
+
+    existing = path.read_text(encoding="utf-8")
+    start = existing.find(begin)
+    finish = existing.find(end)
+    if start >= 0 and finish >= start:
+        finish += len(end)
+        updated = existing[:start] + section.rstrip("\n") + existing[finish:]
+        if updated != existing:
+            path.write_text(updated, encoding="utf-8")
+            return "updated"
+        return "unchanged"
+
+    separator = "" if not existing or existing.endswith("\n\n") else ("\n" if existing.endswith("\n") else "\n\n")
+    path.write_text(existing + separator + section, encoding="utf-8")
+    return "appended"
+
 def git_root(start: str) -> pathlib.Path:
     p=subprocess.run(["git","rev-parse","--show-toplevel"],cwd=start,text=True,stdout=subprocess.PIPE,stderr=subprocess.PIPE)
     if p.returncode != 0:
@@ -105,11 +159,13 @@ def cmd_enable(args):
     root=git_root(args.project)
     workspace_rule=root/".agents/rules/chatgpt-worker.md"
     lessons=root/".agents/rules/project-lessons.md"
+    agents_file=root/"AGENTS.md"
     global_skill=pathlib.Path(args.global_skill).expanduser()
 
     created={
         "workspace_rule": ensure_file(workspace_rule,RULE_TEXT,args.force),
         "project_lessons": ensure_file(lessons,PROJECT_LESSONS,False),
+        "agents_md": ensure_managed_section(agents_file, agents_policy_section(), AGENTS_BEGIN, AGENTS_END),
         "global_learning_skill": ensure_file(global_skill,GLOBAL_SKILL,False),
     }
     print(json.dumps({
@@ -117,6 +173,7 @@ def cmd_enable(args):
         "project_root":str(root),
         "workspace_rule":str(workspace_rule),
         "project_lessons":str(lessons),
+        "agents_md":str(agents_file),
         "global_learning_skill":str(global_skill),
         "created":created,
         "note":"For strongest IDE persistence, set the workspace chatgpt-worker rule activation mode to Always On if the UI exposes activation modes."
@@ -127,6 +184,7 @@ def cmd_status(args):
     paths={
         "workspace_rule":root/".agents/rules/chatgpt-worker.md",
         "project_lessons":root/".agents/rules/project-lessons.md",
+        "agents_md":root/"AGENTS.md",
         "global_learning_skill":pathlib.Path(args.global_skill).expanduser(),
     }
     print(json.dumps({
