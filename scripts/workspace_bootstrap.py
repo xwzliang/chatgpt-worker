@@ -39,7 +39,7 @@ Mandatory lesson workflow:
 Do not persist one-off task details, secrets, credentials, temporary paths, transient failures, or unverified guesses.
 """
 
-PROJECT_LESSONS = """# Project Lessons & Mandatory Engineering Rules
+LESSON_POLICY = """# Project Lessons & Mandatory Engineering Rules
 
 > [!IMPORTANT]
 > **MANDATORY AGENT WORKFLOW RULE**:
@@ -73,11 +73,19 @@ Structure each entry concisely with actionable rules:
 - Secrets, credentials, or personal information.
 - Unverified hypotheses or narrative conversation history.
 
-## Verified Project Lessons
-
-<!-- Add concise verified lessons below this line. -->
 """
 
+LESSONS_BEGIN = "<!-- chatgpt-worker:project-lessons-policy:begin -->"
+LESSONS_END = "<!-- chatgpt-worker:project-lessons-policy:end -->"
+
+def project_lessons_template() -> str:
+    return (
+        LESSONS_BEGIN + "\n"
+        + LESSON_POLICY.rstrip() + "\n"
+        + LESSONS_END
+        + "\n\n## Verified Project Lessons\n\n"
+        + "<!-- Add concise verified lessons below this line. -->\n"
+    )
 
 GLOBAL_SKILL = """---
 name: chatgpt-worker-learnings
@@ -117,7 +125,7 @@ AGENTS_END = "<!-- chatgpt-worker:project-lessons-policy:end -->"
 def agents_policy_section() -> str:
     return (
         AGENTS_BEGIN + "\n"
-        + PROJECT_LESSONS.rstrip() + "\n"
+        + LESSON_POLICY.rstrip() + "\n"
         + AGENTS_END + "\n"
     )
 
@@ -142,6 +150,50 @@ def ensure_managed_section(path: pathlib.Path, section: str, begin: str, end: st
     path.write_text(existing + separator + section, encoding="utf-8")
     return "appended"
 
+def ensure_project_lessons(path: pathlib.Path):
+    section = (
+        LESSONS_BEGIN + "\n"
+        + LESSON_POLICY.rstrip() + "\n"
+        + LESSONS_END + "\n"
+    )
+    path.parent.mkdir(parents=True, exist_ok=True)
+    if not path.exists():
+        path.write_text(project_lessons_template(), encoding="utf-8")
+        return "created"
+
+    existing = path.read_text(encoding="utf-8")
+    start = existing.find(LESSONS_BEGIN)
+    finish = existing.find(LESSONS_END)
+    if start >= 0 and finish >= start:
+        finish += len(LESSONS_END)
+        updated = existing[:start] + section.rstrip("\n") + existing[finish:]
+        if updated != existing:
+            path.write_text(updated, encoding="utf-8")
+            return "updated"
+        return "unchanged"
+
+    # Migration for files created by the immediately previous bootstrap version:
+    # wrap the existing mandatory policy instead of duplicating it.
+    heading = "# Project Lessons & Mandatory Engineering Rules"
+    verified = "## Verified Project Lessons"
+    if heading in existing and verified in existing:
+        policy_start = existing.find(heading)
+        policy_end = existing.find(verified)
+        updated = (
+            existing[:policy_start]
+            + section
+            + "\n"
+            + existing[policy_end:]
+        )
+        path.write_text(updated, encoding="utf-8")
+        return "migrated"
+
+    # Older/custom files keep every existing lesson. Prepend the mandatory policy
+    # so it is consulted before the historical entries.
+    separator = "" if not existing else "\n\n"
+    path.write_text(section.rstrip("\n") + separator + existing, encoding="utf-8")
+    return "prepended"
+
 def git_root(start: str) -> pathlib.Path:
     p=subprocess.run(["git","rev-parse","--show-toplevel"],cwd=start,text=True,stdout=subprocess.PIPE,stderr=subprocess.PIPE)
     if p.returncode != 0:
@@ -164,7 +216,7 @@ def cmd_enable(args):
 
     created={
         "workspace_rule": ensure_file(workspace_rule,RULE_TEXT,args.force),
-        "project_lessons": ensure_file(lessons,PROJECT_LESSONS,False),
+        "project_lessons": ensure_project_lessons(lessons),
         "agents_md": ensure_managed_section(agents_file, agents_policy_section(), AGENTS_BEGIN, AGENTS_END),
         "global_learning_skill": ensure_file(global_skill,GLOBAL_SKILL,False),
     }
